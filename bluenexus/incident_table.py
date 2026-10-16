@@ -6,12 +6,14 @@ _TABLE=st.components.v2.component(
     html='<div class="scroll"><table aria-label="Investigation queue"><colgroup><col class="col-priority"><col class="col-incident"><col class="col-plant"><col class="col-date"><col class="col-days"><col class="col-open"></colgroup><thead><tr><th>Priority</th><th>Investigation</th><th>Plant</th><th>Flagged period</th><th class="number">Days</th><th><span class="sr">Open</span></th></tr></thead><tbody></tbody></table></div>',
     css="""
     .scroll {overflow-x:auto; border:1px solid #d8e4ec; border-radius:12px; background:#fff;}
-    table {border-collapse:collapse; table-layout:fixed; width:100%; min-width:800px; font:14px var(--st-font,sans-serif); color:#173349;}
-    .col-priority {width:160px;}
-    .col-plant {width:95px;}
-    .col-date {width:190px;}
-    .col-days {width:65px;}
-    .col-open {width:55px;}
+    table {border-collapse:collapse; table-layout:fixed; width:100%; min-width:960px; font:14px var(--st-font,sans-serif); color:#173349;}
+    /* Preserve the measured proportions of the original four-row preview. */
+    .col-priority {width:17.89%;}
+    .col-incident {width:37.36%;}
+    .col-plant {width:10.40%;}
+    .col-date {width:18.75%;}
+    .col-days {width:8.07%;}
+    .col-open {width:7.53%;}
     th {background:#153b55; color:#fff; text-align:left; padding:14px 16px; font-size:12px; font-weight:650; letter-spacing:.3px; white-space:nowrap;}
     td {padding:15px 16px; border-bottom:1px solid #e5edf2; vertical-align:middle;}
     tbody tr:nth-child(even) {background:#f7fafc;}
