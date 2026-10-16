@@ -3,10 +3,15 @@ import streamlit as st
 
 _TABLE=st.components.v2.component(
     "bluenexus_incident_table",
-    html='<div class="scroll"><table aria-label="Investigation queue"><thead><tr><th>Priority</th><th>Investigation</th><th>Plant</th><th>Flagged period</th><th class="number">Days</th><th><span class="sr">Open</span></th></tr></thead><tbody></tbody></table></div>',
+    html='<div class="scroll"><table aria-label="Investigation queue"><colgroup><col class="col-priority"><col class="col-incident"><col class="col-plant"><col class="col-date"><col class="col-days"><col class="col-open"></colgroup><thead><tr><th>Priority</th><th>Investigation</th><th>Plant</th><th>Flagged period</th><th class="number">Days</th><th><span class="sr">Open</span></th></tr></thead><tbody></tbody></table></div>',
     css="""
     .scroll {overflow-x:auto; border:1px solid #d8e4ec; border-radius:12px; background:#fff;}
-    table {border-collapse:collapse; width:100%; min-width:700px; font:14px var(--st-font,sans-serif); color:#173349;}
+    table {border-collapse:collapse; table-layout:fixed; width:100%; min-width:800px; font:14px var(--st-font,sans-serif); color:#173349;}
+    .col-priority {width:160px;}
+    .col-plant {width:95px;}
+    .col-date {width:190px;}
+    .col-days {width:65px;}
+    .col-open {width:55px;}
     th {background:#153b55; color:#fff; text-align:left; padding:14px 16px; font-size:12px; font-weight:650; letter-spacing:.3px; white-space:nowrap;}
     td {padding:15px 16px; border-bottom:1px solid #e5edf2; vertical-align:middle;}
     tbody tr:nth-child(even) {background:#f7fafc;}
@@ -17,7 +22,7 @@ _TABLE=st.components.v2.component(
     .urgent {background:#fce5e9; color:#a7273a;}
     .review {background:#fff0ce; color:#805200;}
     .data {background:#e3f2fb; color:#175d7c;}
-    .incident {font-weight:650; min-width:210px;}
+    .incident {font-weight:650; overflow-wrap:anywhere; line-height:1.5;}
     .date {color:#536b7c; font-size:12px; white-space:nowrap;}
     .plant {white-space:nowrap; font-weight:600;}
     .number {text-align:right; font-variant-numeric:tabular-nums;}
