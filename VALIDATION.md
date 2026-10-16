@@ -6,7 +6,7 @@ PyArrow 26.0.0. Direct runtime dependencies are pinned in requirements.txt.
 
 ## Automated checks
 
-16 automated checks:
+17 automated checks:
 
 - Actual Plant A 31 August energy arithmetic, historical load residual and missing
   peer comparison agree with independent calculations.
@@ -25,6 +25,8 @@ PyArrow 26.0.0. Direct runtime dependencies are pinned in requirements.txt.
 - Analysis archive contains its provenance and source files retain their hashes.
 - All six views render for All plants, Plant A and Plant B.
 - Guided links retain the selected investigation through reruns.
+- Browse all cases expands every in-scope row on Operations and collapses back
+  to the four-row preview without navigating away.
 - Equipment-only date ranges do not fabricate performance data.
 - Fixed Plant A recovery is a metric, avoiding floating-point jitter visualization.
 - Saved verification survives navigation and updates the recommendation.

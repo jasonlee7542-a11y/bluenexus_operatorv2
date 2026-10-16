@@ -40,6 +40,9 @@ def show_equipment_history(plant,signal):
     navigate("Equipment",plant,period="All equipment history")
     st.session_state["equipment_"+plant]=signal
 
+def toggle_case_queue():
+    st.session_state.show_all_cases=not st.session_state.get("show_all_cases",False)
+
 @st.cache_data(show_spinner=False,max_entries=4)
 def prepare(blobs,version):
     return analyze(blobs)
@@ -182,12 +185,20 @@ if view=="Operations":
                     st.write(playbook(top.family,top.asset)["remote"][0])
             with right:
                 st.button("Open investigation",type="primary",on_click=navigate,args=("Investigations",top.plant,top.case_id),width="stretch")
-        with focus:
-            st.dataframe(queue_table(main.head(4)),hide_index=True,width="stretch",column_config={"Investigation":st.column_config.TextColumn(width="large"),"Days":st.column_config.NumberColumn(width="small")})
-            st.button(f"Browse all {len(cases)} cases",on_click=navigate,args=("Investigations",),key="browse")
     else:
         st.info("No process/equipment rule episodes intersect these dates. Check available channels and data issues before drawing a health conclusion.")
         st.button("Review data cases",on_click=navigate,args=("Investigations",))
+    expanded=st.session_state.get("show_all_cases",False)
+    if len(cases):
+        with focus:
+            if not expanded:
+                preview=main.head(4) if len(main) else cases.head(4)
+                st.dataframe(queue_table(preview),hide_index=True,width="stretch",key="case_preview")
+            st.button("Show fewer cases" if expanded else f"Browse all {len(cases)} cases",on_click=toggle_case_queue,key="browse")
+        if expanded:
+            st.subheader(f"All {len(cases)} investigations")
+            st.caption("Selected plant and dates · includes data checks")
+            st.dataframe(queue_table(cases),hide_index=True,width="stretch",height=35*(len(cases)+1)+3,row_height=35,key="case_full_queue",column_config={"Investigation":st.column_config.TextColumn(width="large"),"Days":st.column_config.NumberColumn(width="small")})
     with st.expander("Guided walkthrough · three decisions"):
         st.caption("Each shortcut opens historical evidence. Current-condition answers remain yours to verify.")
         for name,which,code,date in [("Why high SEC does not automatically justify a visit","Plant A","LOW_THROUGHPUT_ENERGY","2026-08-31"),("Reconcile a large delivery discrepancy","Plant B","DELIVERY_DISCREPANCY","2026-08-11"),("Verify an extreme temperature reading","Plant A","TEMPERATURE_ASSUMED_HIGH","2026-01-01")]:

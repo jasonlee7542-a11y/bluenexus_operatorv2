@@ -39,6 +39,22 @@ def test_empty_scope_is_explicit(app):
     assert not app.exception
     assert any("No performance records" in x.value for x in app.info)
 
+def test_browse_expands_all_cases_in_operations(app):
+    button=app.button(key="browse")
+    count=int(button.label.split()[2])
+    button.click().run()
+    assert not app.exception
+    assert app.session_state["view"]=="Operations"
+    table=next(x for x in app.dataframe if len(x.value)==count)
+    assert len(table.value)==count
+    assert app.button(key="browse").label=="Show fewer cases"
+    app.run()
+    assert app.session_state["show_all_cases"]
+    app.button(key="browse").click().run()
+    assert not app.session_state["show_all_cases"]
+    assert app.session_state["view"]=="Operations"
+    assert len(app.dataframe[0].value)==4
+
 def test_hidden_temperature_shortcut_renders_original_january_values(app):
     import base64
     import json
