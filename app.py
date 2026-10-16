@@ -20,7 +20,7 @@ from bluenexus.ingestion.sanitizer import FILES
 from bluenexus.playbooks import playbook
 from bluenexus.service import VERSION,analyze,in_scope,energy_summary,analysis_bundle
 from bluenexus.workflow import CURRENT,OUTCOMES,recommendation,handoff,worklog_payload,import_worklog,timestamp
-from bluenexus.incident_table import incident_table
+from bluenexus.incident_table import incident_table,scroll_to_top
 
 st.set_page_config(page_title="BlueNexus | Operations review",page_icon=":material/water_drop:",layout="wide")
 st.html(ROOT/"assets/dashboard.css")
@@ -204,6 +204,7 @@ if view=="Operations":
         def open_queue_case(case_id):
             chosen=cases.loc[cases.case_id.eq(case_id)].iloc[0]
             st.session_state.operations_return_scope={"plant":st.session_state.plant,"period":st.session_state.period}
+            st.session_state.scroll_to_investigation=True
             navigate("Investigations",chosen.plant,case_id)
         incident_table(visible,on_open=open_queue_case)
         st.button("Show fewer cases" if expanded else f"Browse all {len(cases)} cases",on_click=toggle_case_queue,key="browse")
@@ -216,6 +217,8 @@ if view=="Operations":
             if len(found): st.button(name,on_click=navigate,args=("Investigations",which,found.iloc[0].case_id,"All equipment history"),key="story_"+code)
 
 elif view=="Investigations":
+    if st.session_state.pop("scroll_to_investigation",False):
+        scroll_to_top()
     st.session_state.setdefault("case_priority",["Verify promptly","Investigate","Check data"])
     with investigation_tools:
         active_filters=int(st.session_state.get("case_type","All cases")!="All cases")+int(set(st.session_state.case_priority)!={"Verify promptly","Investigate","Check data"})

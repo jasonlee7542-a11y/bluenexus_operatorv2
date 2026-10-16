@@ -68,3 +68,17 @@ def incident_table(cases,on_open,key="incident_queue"):
         if case_id in allowed:
             on_open(case_id)
     return _TABLE(data={"rows":queue_records(cases)},key=key,on_opened_change=opened)
+
+_SCROLL_TOP=st.components.v2.component(
+    "bluenexus_scroll_top",
+    html='<div aria-hidden="true"></div>',
+    css="div { width:0; height:0; overflow:hidden; }",
+    js="""
+    export default function({data}) {
+      if(data?.top) requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'instant'}));
+    }
+    """,
+)
+
+def scroll_to_top(*,key="investigation_scroll_top"):
+    return _SCROLL_TOP(data={"top":True},key=key)
