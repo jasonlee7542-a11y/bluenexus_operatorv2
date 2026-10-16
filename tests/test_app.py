@@ -10,7 +10,64 @@ sys.path.insert(0,str(ROOT))
 def app():
     if not (ROOT/"data/raw/plant_daily_performance.csv").exists():
         pytest.skip("Restricted challenge CSVs not present")
+    # Each AppTest gets a new component registry; re-register the custom UI.
+    sys.modules.pop("bluenexus.incident_table",None)
     return AppTest.from_file(str(ROOT/"app.py"),default_timeout=30).run()
+
+
+def test_workspace_switches_do_not_add_back_steps(app):
+    for page in ["Investigations","Energy","Water & quality","Equipment","Data & methods","Operations"]:
+        app.button_group(key="workspace_view").set_value(page).run()
+        assert not app.exception
+        assert app.session_state["view"]==page
+        assert app.button(key="back").disabled
+
+
+def test_back_stays_on_page_and_restores_local_filters(app):
+    app.button(key="browse").click().run()
+    assert app.session_state["show_all_cases"]
+    app.button_group(key="workspace_view").set_value("Energy").run()
+    assert app.button(key="back").disabled
+    app.selectbox(key="plant").select("Plant A").run()
+    app.run()
+    app.button(key="back").click().run()
+    assert not app.exception
+    assert app.session_state["view"]=="Energy"
+    assert app.selectbox(key="plant").value=="All plants"
+    assert app.button(key="back").disabled
+    app.button_group(key="workspace_view").set_value("Operations").run()
+    assert app.session_state["view"]=="Operations"
+    assert not app.session_state.get("show_all_cases",False)
+    assert app.button(key="back").disabled
+
+
+def test_back_restores_investigation_selection_without_leaving_page(app):
+    [b for b in app.button if b.label=="Why high SEC does not automatically justify a visit"][0].click().run()
+    assert not app.button(key="back").disabled
+    selected=app.selectbox(key="selected_case").value
+    other=next(i for i,x in enumerate(app.selectbox(key="selected_case").options) if "High energy intensity" not in x)
+    app.selectbox(key="selected_case").select_index(other).run()
+    app.button(key="back").click().run()
+    assert not app.exception
+    assert app.session_state["view"]=="Investigations"
+    assert app.selectbox(key="selected_case").value==selected
+    app.button(key="back").click().run()
+    assert app.selectbox(key="selected_case").value is None
+    assert any(x.value=="Investigation queue" for x in app.subheader)
+    assert app.button(key="back").disabled
+
+
+def test_back_restores_equipment_measurement(app):
+    app.button_group(key="workspace_view").set_value("Equipment").run()
+    original=app.selectbox(key="equipment_Plant A").value
+    other=app.selectbox(key="equipment_Plant A").options[1].split(" · ")[-1]
+    app.selectbox(key="equipment_Plant A").select(other).run()
+    app.button(key="back").click().run()
+    assert not app.exception
+    assert app.session_state["view"]=="Equipment"
+    assert app.selectbox(key="equipment_Plant A").value==original
+    assert app.button(key="back").disabled
+
 
 def test_every_view_renders_for_both_plants(app):
     for plant in ["All plants","Plant A","Plant B"]:
@@ -92,10 +149,40 @@ def test_investigation_controls_stay_in_sidebar_and_filter(app):
     app.sidebar.selectbox(key="case_type").select("Data consistency").run()
     assert not app.exception
     assert app.session_state["view"]=="Investigations"
-    assert app.selectbox(key="selected_case").value
+    assert app.selectbox(key="selected_case").value is None
     app.sidebar.multiselect(key="case_priority").set_value([]).run()
     assert any("No cases match" in x.value for x in app.info)
     assert app.sidebar.selectbox(key="case_type")
+
+
+def test_investigations_opens_home_and_returns_home_on_reentry(app):
+    assert app.session_state["view"]=="Operations"
+    assert not app.session_state.get("show_all_cases",False)
+    app.button_group(key="workspace_view").set_value("Investigations").run()
+    assert app.selectbox(key="selected_case").value is None
+    assert any(x.value=="Investigation queue" for x in app.subheader)
+    assert not app.get("form")
+    app.selectbox(key="selected_case").select_index(0).run()
+    assert app.selectbox(key="selected_case").value is not None
+    assert app.get("form")
+    app.button_group(key="workspace_view").set_value("Energy").run()
+    app.button_group(key="workspace_view").set_value("Investigations").run()
+    assert not app.exception
+    assert app.selectbox(key="selected_case").value is None
+    assert not app.get("form")
+    assert app.button(key="back").disabled
+
+
+def test_fresh_session_does_not_inherit_open_case(app):
+    [b for b in app.button if b.label=="Reconcile a large delivery discrepancy"][0].click().run()
+    assert app.selectbox(key="selected_case").value is not None
+    sys.modules.pop("bluenexus.incident_table",None)
+    fresh=AppTest.from_file(str(ROOT/"app.py"),default_timeout=30).run()
+    assert fresh.session_state["view"]=="Operations"
+    fresh.button_group(key="workspace_view").set_value("Investigations").run()
+    assert not fresh.exception
+    assert fresh.selectbox(key="selected_case").value is None
+    assert fresh.button(key="back").disabled
 
 def test_save_evidence_and_revisit_preserves_review(app):
     [b for b in app.button if b.label=="Reconcile a large delivery discrepancy"][0].click().run()

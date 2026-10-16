@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 import sys
 import zipfile
+from copy import deepcopy
 
 ROOT=Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -28,14 +29,74 @@ VIEWS=["Operations","Investigations","Energy","Water & quality","Equipment","Dat
 for key,value in dict(view="Operations",plant="All plants",period="Performance period",reviews={},revision=0).items():
     st.session_state.setdefault(key,value)
 
+PAGE_KEYS={
+    "Operations":("show_all_cases","guided_walkthrough","priority_history"),
+    "Investigations":("selected_case","case_type","case_priority","investigation_tab","remaining_checks","possible_causes"),
+    "Energy":("energy_tab_Plant A","energy_tab_Plant B","energy_evidence_Plant A","energy_evidence_Plant B","energy_methods","priority_history"),
+    "Water & quality":("water_interpret_Plant A","water_interpret_Plant B","water_chemicals_Plant A","water_chemicals_Plant B","priority_history"),
+    "Equipment":("equipment_Plant A","equipment_Plant B","related_Plant A","related_Plant B","units_Plant A","units_Plant B","supporting_Plant A","supporting_Plant B","priority_history"),
+    "Data & methods":("audit_source","audit_status","audit_codes","data_quality","rule_registry","model_coverage","reproducibility","priority_history"),
+}
+NAVIGATION_KEYS=("plant","period","dates")+tuple(dict.fromkeys(key for keys in PAGE_KEYS.values() for key in keys))
+st.session_state.setdefault("page_history",{})
+st.session_state.setdefault("page_snapshots",{})
+# Keep view-specific controls available when Streamlit cleans up hidden widgets.
+for key in NAVIGATION_KEYS:
+    if key in st.session_state:
+        st.session_state[key]=st.session_state[key]
+
 def navigate(view,plant=None,case_id=None,period=None):
+    if view!=st.session_state.view:
+        # Workspace entry always starts at that page's home view.
+        for key in PAGE_KEYS[view]:
+            st.session_state.pop(key,None)
+        st.session_state.page_history[view]=[]
+        st.session_state.page_snapshots.pop(view,None)
+        st.session_state.pop("focus_case",None)
     st.session_state.view=view
+    restore_operations_scope()
     if plant: st.session_state.plant=plant
     if period: st.session_state.period=period
     if case_id:
-        st.session_state.focus_case=case_id
         st.session_state.case_type="All cases"
         st.session_state.case_priority=["Verify promptly","Investigate","Check data"]
+        if view not in st.session_state.page_snapshots:
+            st.session_state.selected_case=None
+            st.session_state.page_snapshots[view]=page_snapshot()
+        st.session_state.selected_case=case_id
+        record_page_change()
+        st.session_state.focus_case=case_id
+
+def page_snapshot():
+    keys=("plant","period","dates")+PAGE_KEYS[st.session_state.view]
+    return {key:deepcopy(st.session_state[key]) for key in keys if key in st.session_state}
+
+def record_page_change():
+    view=st.session_state.view
+    previous=st.session_state.page_snapshots.get(view)
+    current=page_snapshot()
+    if previous is not None and previous!=current:
+        st.session_state.page_history.setdefault(view,[]).append(deepcopy(previous))
+    st.session_state.page_snapshots[view]=current
+
+def go_back():
+    view=st.session_state.view
+    history=st.session_state.page_history.get(view,[])
+    if not history:
+        return
+    previous=history.pop()
+    for key in ("plant","period","dates")+PAGE_KEYS[view]:
+        if key in previous:
+            st.session_state[key]=previous[key]
+        else:
+            st.session_state.pop(key,None)
+    st.session_state.pop("focus_case",None)
+    st.session_state.pop("operations_return_scope",None)
+    st.session_state.pop("scroll_to_investigation",None)
+    st.session_state.page_snapshots[view]=page_snapshot()
+
+def change_workspace():
+    navigate(st.session_state.workspace_view or st.session_state.view)
 
 def show_equipment_history(plant,signal):
     navigate("Equipment",plant,period="All equipment history")
@@ -43,6 +104,7 @@ def show_equipment_history(plant,signal):
 
 def toggle_case_queue():
     st.session_state.show_all_cases=not st.session_state.get("show_all_cases",False)
+    record_page_change()
 
 def restore_operations_scope():
     if st.session_state.get("view")=="Operations" and st.session_state.get("operations_return_scope"):
@@ -78,8 +140,8 @@ with st.sidebar:
     with st.container(key="brand"):
         st.image(str(ROOT/"assets/bluenexus-logo.png"),width=220)
     st.header("Review filters")
-    st.selectbox("Plant",["All plants","Plant A","Plant B"],key="plant")
-    st.selectbox("Date range",["Performance period","All equipment history","Latest 30 recorded days","Custom dates"],key="period",
+    st.selectbox("Plant",["All plants","Plant A","Plant B"],key="plant",on_change=record_page_change)
+    st.selectbox("Date range",["Performance period","All equipment history","Latest 30 recorded days","Custom dates"],key="period",on_change=record_page_change,
                  format_func=lambda value:{"Performance period":"Performance period · Jul–Aug","All equipment history":"All available dates · Jan–Sep","Latest 30 recorded days":"Latest 30 days"}.get(value,value))
     custom_dates_slot=st.container()
     reset_slot=st.container()
@@ -133,7 +195,7 @@ elif st.session_state.period=="All equipment history": start,end=first,last
 elif st.session_state.period=="Latest 30 recorded days": start,end=(pd.Timestamp(last)-pd.Timedelta(days=29)).date(),last
 else:
     with custom_dates_slot:
-        dates=st.date_input("Date interval",value=(performance_start,performance_end),min_value=min(first,performance_start),max_value=max(last,performance_end),key="dates")
+        dates=st.date_input("Date interval",value=(performance_start,performance_end),min_value=min(first,performance_start),max_value=max(last,performance_end),key="dates",on_change=record_page_change)
     if len(dates)!=2:
         st.info("Choose both the start and end date.");st.stop()
     start,end=dates
@@ -155,11 +217,14 @@ with session_slot:
     st.download_button("Export work log",worklog_payload(st.session_state.reviews,result.fingerprint),"BlueNexus_work_log.json","application/json",width="stretch")
 with reset_slot:
     st.button("Reset filters",on_click=navigate,args=("Operations","All plants",None,"Performance period"),width="stretch")
-st.segmented_control("Workspace",VIEWS,key="view",selection_mode="single",width="stretch",label_visibility="collapsed",on_change=restore_operations_scope)
+st.session_state.workspace_view=st.session_state.view
+st.segmented_control("Workspace",VIEWS,key="workspace_view",selection_mode="single",width="stretch",label_visibility="collapsed",on_change=change_workspace)
+history=st.session_state.page_history.get(st.session_state.view,[])
+st.button("Back",icon=":material/arrow_back:",key="back",on_click=go_back,
+          disabled=not history,help="Return to the previous view within this page" if history else "No previous view within this page yet")
 view=st.session_state.view or "Operations"
-if view!="Investigations":
-    st.title(view)
-    st.caption(f"{plant}   /   {start:%d %b} – {end:%d %b %Y}   /   Historical review")
+st.title(view)
+st.caption(f"{plant}   /   {start:%d %b} – {end:%d %b %Y}   /   Historical review")
 
 # Keep excluded priority evidence visible wherever an operator enters the app.
 outside=result.cases.loc[result.cases.plant.isin(plants)&result.cases.priority.eq("Verify promptly")&~result.cases.case_id.isin(cases.case_id)]
@@ -182,7 +247,7 @@ if len(outside) and view!="Investigations":
     if first_hidden.code=="TEMPERATURE_ASSUMED_HIGH":
         hidden_label+=f" · temperature {first_hidden.value:.1f} (unit unverified)"
     if len(outside)>1: hidden_label+=f" · +{len(outside)-1} more"
-    with st.expander(":material/history: "+hidden_label):
+    with st.expander(":material/history: "+hidden_label,key="priority_history",on_change=record_page_change):
         priority_history()
 
 if view=="Operations":
@@ -224,7 +289,7 @@ if view=="Operations":
         st.button("Show fewer cases" if expanded else f"Browse all {len(cases)} cases",on_click=toggle_case_queue,key="browse")
     else:
         st.info("No investigations in the selected plant and dates.")
-    with st.expander("Guided walkthrough · three decisions"):
+    with st.expander("Guided walkthrough · three decisions",key="guided_walkthrough",on_change=record_page_change):
         st.caption("Each shortcut opens historical evidence. Current-condition answers remain yours to verify.")
         for name,which,code,date in [("Why high SEC does not automatically justify a visit","Plant A","LOW_THROUGHPUT_ENERGY","2026-08-31"),("Reconcile a large delivery discrepancy","Plant B","DELIVERY_DISCREPANCY","2026-08-11"),("Verify an extreme temperature reading","Plant A","TEMPERATURE_ASSUMED_HIGH","2026-01-01")]:
             found=result.cases.loc[result.cases.plant.eq(which)&result.cases.code.eq(code)&result.cases.start.le(pd.Timestamp(date))&result.cases.end.ge(pd.Timestamp(date))]
@@ -237,8 +302,8 @@ elif view=="Investigations":
     with investigation_tools:
         active_filters=int(st.session_state.get("case_type","All cases")!="All cases")+int(set(st.session_state.case_priority)!={"Verify promptly","Investigate","Check data"})
         with st.popover(f"Queue filters{f' · {active_filters} active' if active_filters else ''}",icon=":material/filter_list:",width="stretch",key="queue_filters"):
-            family=st.selectbox("Case type",["All cases","Process & equipment","Data consistency"],key="case_type")
-            priority=st.multiselect("Review priority",["Verify promptly","Investigate","Check data"],key="case_priority")
+            family=st.selectbox("Case type",["All cases","Process & equipment","Data consistency"],key="case_type",on_change=record_page_change)
+            priority=st.multiselect("Review priority",["Verify promptly","Investigate","Check data"],key="case_priority",on_change=record_page_change)
         if len(outside):
             with st.popover(f"Outside dates · {len(outside)} flagged",icon=":material/history:",width="stretch",key="outside_dates"):
                 priority_history()
@@ -252,13 +317,21 @@ elif view=="Investigations":
         available=cases
         st.caption("Showing all case types for the linked investigation. Adjust filters to resume a filtered queue.")
     if available.empty:
+        st.session_state.page_snapshots[view]=page_snapshot()
         st.info("No cases match this scope and these filters. This does not establish healthy operation.");st.stop()
     options=available.case_id.tolist()
     if focus in options: st.session_state.selected_case=focus
-    if st.session_state.get("selected_case") not in options: st.session_state.selected_case=options[0]
-    selected=st.selectbox("Investigation",options,
+    if st.session_state.get("selected_case") not in options: st.session_state.selected_case=None
+    selected=st.selectbox("Investigation",options,index=None,placeholder="Choose an investigation to review",
                           format_func=lambda x: f"{available.loc[available.case_id.eq(x)].iloc[0].priority} · {available.loc[available.case_id.eq(x)].iloc[0].plant} · {available.loc[available.case_id.eq(x)].iloc[0].start:%d %b %Y} · {available.loc[available.case_id.eq(x)].iloc[0].title}",
-                          key="selected_case",label_visibility="collapsed")
+                          key="selected_case",label_visibility="collapsed",on_change=record_page_change)
+    if selected is None:
+        st.subheader("Investigation queue")
+        st.caption("Select a case to open its evidence, verification and handoff.")
+        incident_table(available,on_open=lambda case_id:navigate("Investigations",case_id=case_id),key="investigation_home_queue")
+        st.session_state.page_snapshots[view]=page_snapshot()
+        st.caption(f"BlueNexus · v{VERSION} · Historical decision support")
+        st.stop()
     row=available.loc[available.case_id.eq(selected)].iloc[0]
     book=playbook(row.family,row.asset)
     review=st.session_state.reviews.get(selected,{})
@@ -298,13 +371,13 @@ elif view=="Investigations":
                         st.caption(f"Similar-output comparison unavailable: {int(e.peer_count)} earlier peers; at least 5 required.")
         st.markdown("**Remote checks · start here**")
         st.info(book["remote"][0],icon=":material/search:")
-        with st.expander("Remaining checks"):
+        with st.expander("Remaining checks",key="remaining_checks",on_change=record_page_change):
             for i,step in enumerate(book["remote"][1:],2): st.write(f"{i}. {step}")
-        with st.expander("Possible causes & missing evidence"):
+        with st.expander("Possible causes & missing evidence",key="possible_causes",on_change=record_page_change):
             for cause in book["causes"]: st.write("• "+cause)
             st.caption("These are hypotheses, not diagnoses.")
             st.write("**Still needed:** "+book["missing"])
-    t1,t2,t3=st.tabs(["Record verification","Technician handoff","Daily evidence"])
+    t1,t2,t3=st.tabs(["Record verification","Technician handoff","Daily evidence"],key="investigation_tab",on_change=record_page_change)
     with t1:
         st.caption("Save before leaving · export work log to retain")
         with st.form("review_"+selected+"_"+str(st.session_state.revision)):
@@ -348,7 +421,7 @@ elif view=="Energy":
         a.metric("Energy · kWh/m³",display(s["sec"],3),border=True,help="Weighted: electricity ÷ product water on matching valid dates.")
         b.metric("Days >20% above estimate",str(part.energy_load_residual_fraction.gt(.2).sum()),border=True,help="Descriptive count. An investigation requires two consecutive days.")
         c.metric("Peer coverage",f"{part.peer_gap_fraction.notna().sum()}/{len(part)}",border=True,help="Days with enough earlier similar-output comparisons. Missing days are unassessed.")
-        intensity,load=st.tabs(["Energy per m³","Production-adjusted energy"])
+        intensity,load=st.tabs(["Energy per m³","Production-adjusted energy"],key="energy_tab_"+name,on_change=record_page_change)
         with intensity:
             plot(lines(part,["sec_kwh_m3","planned_specific_energy_kwh_m3","peer_median_sec"]),key="sec_"+name)
             st.caption("Solid: actual · dotted: supplied target / earlier similar-output reference")
@@ -359,13 +432,13 @@ elif view=="Energy":
             residual.add_hline(y=0,line_color="#acbdc9")
             plot(residual,key="residual_"+name)
             st.caption(f"Estimate coverage: {part.expected_energy_kwh.notna().sum()}/{len(part)} days · earlier observations only")
-        with st.expander("Daily evidence & target definitions"):
+        with st.expander("Daily evidence & target definitions",key="energy_evidence_"+name,on_change=record_page_change):
             st.write("Supplied target = reference from the challenge CSV. Historical estimate = fitted from earlier output and energy. Neither establishes a fault; output adjustment does not account for feedwater, cleaning or runtime.")
             a,b=st.columns(2);a.metric("Net energy versus target",display(s["net"],0)+" kWh");b.metric("Above-target days only",display(s["positive"],0)+" kWh")
             st.caption("These are reference gaps, not demonstrated or attainable savings.")
             st.dataframe(part[["date","effluent_volume_m3","daily_electricity_kwh","sec_kwh_m3","expected_energy_kwh","energy_load_residual_fraction","peer_count","peer_gap_fraction","peer_dates"]],hide_index=True,width="stretch")
         st.button("Review "+name+" investigations",on_click=navigate,args=("Investigations",name),key="energy_cases_"+name)
-    with st.expander("How the two comparisons work"):
+    with st.expander("How the two comparisons work",key="energy_methods",on_change=record_page_change):
         st.write("Similar-output reference: median SEC on at least five earlier, non-standby-indicated days within ±20% of output over the prior 60 days. Load model: nonnegative fixed electricity plus a nonnegative production-dependent term, fitted on at least 14 earlier eligible observations and refreshed every seven rows. Neither comparison establishes a cause.")
 
 elif view=="Water & quality":
@@ -391,9 +464,9 @@ elif view=="Water & quality":
         with right:
             st.markdown("**Conductivity passage proxy**")
             plot(lines(part,["salt_passage_proxy"]),key="conductivity_"+name)
-        with st.expander("How to interpret water & quality"):
+        with st.expander("How to interpret water & quality",key="water_interpret_"+name,on_change=record_page_change):
             st.write("Recovery measurements may have different boundaries. Plant A's fixed 75% ratio does not establish membrane health. pH shading is a provisional review interval, not a compliance limit. Conductivity is a proxy; sample locations need confirmation.")
-        with st.expander("Chemical records and reporting coverage"):
+        with st.expander("Chemical records and reporting coverage",key="water_chemicals_"+name,on_change=record_page_change):
             st.write(f"NaOH recorded on {part.actual_naoh_dose_reported.notna().sum()}/{len(part)} dates. Dose units are unverified; missing records are not zero dose.")
             plot(lines(part,["actual_naoh_dose_reported","planned_naoh_dose_reported"]),key="naoh_"+name)
             st.caption("Sparse records may be reconciliation entries. Coincidence with pH does not establish dosing causality.")
@@ -411,7 +484,7 @@ elif view=="Equipment":
         linked=cases.loc[cases.plant.eq(name)&cases.signal.isin(supported)]
         priority_tags=list(dict.fromkeys(linked.signal))
         supported=priority_tags+[s for s in supported if s not in priority_tags]
-        chosen=st.selectbox("Measurement · "+name,supported,format_func=lambda x:tag_info(x)["asset"]+" · "+tag_info(x)["label"]+" · "+x,key="equipment_"+name)
+        chosen=st.selectbox("Measurement · "+name,supported,format_func=lambda x:tag_info(x)["asset"]+" · "+tag_info(x)["label"]+" · "+x,key="equipment_"+name,on_change=record_page_change)
         info=tag_info(chosen)
         screened=screen(full.set_index("date")[chosen],result.settings["equipment_baseline_days"],result.settings["equipment_iqr_multiplier"])
         scoped=screened.loc[screened.date.between(pd.Timestamp(start),pd.Timestamp(end))]
@@ -425,7 +498,7 @@ elif view=="Equipment":
         st.caption(info["unit"]+" · Original reported values")
         plot(equipment_chart(scoped,info,marked,high),key="equipment_chart_"+name)
         st.caption("Click ‘Prior statistical band’ in the legend to show the reference range.")
-        with st.expander("Units, thresholds & coverage"):
+        with st.expander("Units, thresholds & coverage",key="units_"+name,on_change=record_page_change):
             st.write(info["confidence"]+". Electrical registers are not automatically rescaled.")
             if info["kind"]=="temperature":
                 st.write("Absolute review above 120 applies only if Celsius and scaling are confirmed.")
@@ -434,9 +507,9 @@ elif view=="Equipment":
         if len(relevant):
             st.button("Open linked investigation · "+name,on_click=navigate,args=("Investigations",name,relevant.iloc[0].case_id),key="linked_"+name)
         else: st.caption("No qualifying investigation episode for this measurement in the selected dates.")
-        with st.expander("Aligned supporting signals · "+name):
+        with st.expander("Aligned supporting signals · "+name,key="supporting_"+name,on_change=record_page_change):
             related=[c for c in supported if tag_info(c)["asset"]==info["asset"] and c!=chosen]
-            extra=st.multiselect("Compare measurements",related,default=related[:2],max_selections=3,key="related_"+name)
+            extra=st.multiselect("Compare measurements",related,default=related[:2],max_selections=3,key="related_"+name,on_change=record_page_change)
             for signal in extra:
                 plot(lines(part,[signal]),key="related_chart_"+name+signal)
             st.caption("Charts share the date interval and retain each measurement's own unit. Similar shapes do not establish causation.")
@@ -455,27 +528,27 @@ elif view=="Data & methods":
     st.subheader("Source coverage")
     st.dataframe(pd.DataFrame(result.manifest)[["file","source_rows","rows","first_date","last_date"]],hide_index=True,width="stretch")
     st.caption("Source and channel audits cover complete files, independent of the date filter. Availability is measured after parsing and before application-range exclusions.")
-    source=st.selectbox("Source file",list(FILES),key="audit_source")
-    status=st.multiselect("Channel availability",["VARIABLE","CONSTANT","MISSING"],default=["VARIABLE","CONSTANT","MISSING"])
+    source=st.selectbox("Source file",list(FILES),key="audit_source",on_change=record_page_change)
+    status=st.multiselect("Channel availability",["VARIABLE","CONSTANT","MISSING"],default=["VARIABLE","CONSTANT","MISSING"],key="audit_status",on_change=record_page_change)
     st.dataframe(result.audit.loc[result.audit.source.eq(source)&result.audit.availability.isin(status)],hide_index=True,width="stretch",height=300)
-    with st.expander("Data-quality evidence and parsing decisions"):
+    with st.expander("Data-quality evidence and parsing decisions",key="data_quality",on_change=record_page_change):
         quality=in_scope(result.quality,plant,start,end)
         st.caption(f"{len(quality):,} signal-date checks in the selected scope; repeated flatlines are audit evidence, not separate operator alarms.")
-        codes=st.multiselect("Checks to inspect",sorted(result.quality.code.unique()),default=["PHYSICAL_RANGE","COUNTER_DECREASE"])
+        codes=st.multiselect("Checks to inspect",sorted(result.quality.code.unique()),default=["PHYSICAL_RANGE","COUNTER_DECREASE"],key="audit_codes",on_change=record_page_change)
         st.dataframe(quality.loc[quality.code.isin(codes)],hide_index=True,width="stretch",height=300)
         st.dataframe(result.parsing,hide_index=True,width="stretch")
         st.write("Exact duplicate rows are removed and counted. Conflicting plant/date keys stop processing. Missing tokens and nonfinite numbers become missing; invalid tokens are logged. Configured range exclusions retain raw evidence. No forward filling of chemistry, interpolation of missing days, or automatic electrical rescaling is performed.")
-    with st.expander("Rule registry and assumptions"):
+    with st.expander("Rule registry and assumptions",key="rule_registry",on_change=record_page_change):
         st.dataframe(pd.DataFrame([dict(code=k,family=v[0],title=v[1],rule=v[3]) for k,v in PROCESS_RULES.items()]),hide_index=True,width="stretch")
         st.write("Equipment: immediate review above 120 only under an assumed Celsius scale; persistent upward changes above the previous 14-calendar-day Q3 + 1.5×IQR for 3 consecutive days. Missing days reset persistence. Known zero speed suppresses relative trend rules. A flat baseline remains unscored.")
         st.write("All numeric thresholds are prototype review policies. Temperature units, physical asset mapping, product specifications and operating modes require engineering confirmation. None is a manufacturer-certified alarm limit.")
         st.json(result.settings)
-    with st.expander("Model coverage and training history"):
+    with st.expander("Model coverage and training history",key="model_coverage",on_change=record_page_change):
         st.caption("Unusualness scores are exploratory; they are not failure probabilities. Different detector coverage is not directly comparable.")
         st.dataframe(daily[["plant","date","model_status","available_detectors","statistical_score","pca_score","isolation_score","ensemble_score","multivariate_train_through"]],hide_index=True,width="stretch")
         st.dataframe(pd.DataFrame(result.training).astype(str),hide_index=True,width="stretch")
         st.write("PCA and Isolation Forest require 28 earlier eligible rows. Imputation and scaling are fitted only on earlier data. These process models use output, SEC, conductivity passage and product pH. No confirmed failure labels or measured early-warning accuracy are available.")
-    with st.expander("Reproducibility and engineering references"):
+    with st.expander("Reproducibility and engineering references",key="reproducibility",on_change=record_page_change):
         st.code(result.fingerprint,language=None)
         st.dataframe(pd.DataFrame(result.manifest),hide_index=True,width="stretch")
         st.markdown("[DuPont RO/NF technical manual](https://www.dupont.com/content/dam/dupont/amer/us/en/water-solutions/public/documents/en/RO-NF-FilmTec-Manual-45-D01504-en.pdf) · [SKF bearing investigation](https://www.skf.com/binaries/pub12/Images/0901d1968064c148-Bearing-failures---14219_2-EN_tcm_12-297619.pdf)")
@@ -483,4 +556,5 @@ elif view=="Data & methods":
     st.download_button("Download reproducible analysis bundle",analysis_bundle(result),"BlueNexus_analysis.zip","application/zip",type="primary")
     st.caption("The analysis bundle includes derived plant data and must follow the dataset's confidentiality restrictions.")
 
+st.session_state.page_snapshots[view]=page_snapshot()
 st.caption(f"BlueNexus · v{VERSION} · Historical decision support")

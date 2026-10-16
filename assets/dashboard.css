@@ -23,7 +23,7 @@
 [class*="st-key-panel_plant"] {border-top: 4px solid #128c91;}
 [data-testid="stMetricLabel"] {font-weight: 600;}
 [data-testid="stPlotlyChart"] {background: white; border-radius: 14px; border: 1px solid #e1e8ee;}
-.st-key-view {background: white; padding: 6px; border: 1px solid #dce5ed; border-radius: 12px;}
+.st-key-workspace_view {background: white; padding: 6px; border: 1px solid #dce5ed; border-radius: 12px;}
 h1 {letter-spacing: -1.2px;}
 h2,h3 {letter-spacing: -.4px;}
 @media(max-width:640px) {

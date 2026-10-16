@@ -63,6 +63,14 @@ access. Browser upload is the default delivery path.
 
 ## Operator notes and persistence
 
+Use **← Back** below the workspace tabs to undo navigation within the current
+page: filters, investigation or equipment selections, detail tabs and expanded
+sections. Opening a workspace page starts at its home view with a fresh Back
+history. Investigations opens the queue without selecting an alert. Explicit
+case shortcuts open the requested evidence, with Back returning to the queue.
+Back never switches pages and is disabled when the current page has no earlier
+state. Saved verification records remain available throughout the session.
+
 Use **Save verification and update recommendation** to commit form answers to the
 session. Unsaved form edits are not retained when changing pages. Export the
 **work log** in the sidebar before leaving. Restore it in **Data & methods**.
