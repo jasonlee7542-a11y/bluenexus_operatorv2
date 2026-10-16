@@ -34,8 +34,8 @@ def lines(frame, keys, ylabel=None):
 
 def equipment_chart(screened, info, markers=None, high=None):
     fig=go.Figure()
-    fig.add_scatter(x=screened.date,y=screened.lower_fence,line=dict(width=0),showlegend=False,hoverinfo="skip")
-    fig.add_scatter(x=screened.date,y=screened.upper_fence,line=dict(width=0),fill="tonexty",fillcolor="rgba(22,136,170,.12)",name="Prior statistical band",hoverinfo="skip")
+    fig.add_scatter(x=screened.date,y=screened.lower_fence,line=dict(width=0),showlegend=False,hoverinfo="skip",legendgroup="baseline",visible="legendonly")
+    fig.add_scatter(x=screened.date,y=screened.upper_fence,line=dict(width=0),fill="tonexty",fillcolor="rgba(22,136,170,.12)",name="Prior statistical band",hoverinfo="skip",legendgroup="baseline",visible="legendonly")
     fig.add_scatter(x=screened.date,y=screened.value,name=info["label"],mode="lines+markers",line=dict(color=NAVY),marker=dict(size=4),connectgaps=False)
     flags=screened.loc[screened.flag]
     fig.add_scatter(x=flags.date,y=flags.value,name="Statistical deviation",mode="markers",marker=dict(color=AMBER,size=8,symbol="circle-open"))

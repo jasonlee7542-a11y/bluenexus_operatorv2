@@ -7,7 +7,7 @@ SIGNALS = {
     "daily_electricity_kwh": ("Electricity", "kWh/day", 1),
     "expected_energy_kwh": ("Historical load estimate", "kWh/day", 1),
     "sec_kwh_m3": ("Energy per m³", "kWh/m³", 1),
-    "planned_specific_energy_kwh_m3": ("Supplied energy plan", "kWh/m³", 1),
+    "planned_specific_energy_kwh_m3": ("Supplied energy target", "kWh/m³", 1),
     "sec_deviation": ("SEC versus plan", "%", 100),
     "energy_load_residual_fraction": ("Electricity versus load estimate", "%", 100),
     "peer_median_sec": ("Similar-output SEC reference", "kWh/m³", 1),
@@ -44,9 +44,9 @@ def tag_info(tag):
         asset = "RO pump " + next(x for x in match.groups() if x)
     kind, name, unit = "other", tag, "reported units (unverified)"
     if "qz_temp" in tag:
-        kind, name, unit = "temperature", "Front bearing temperature", "°C assumed — verify scale"
+        kind, name, unit = "temperature", "QZ temperature (front bearing, provisional)", "°C assumed — verify scale"
     elif "hz_temp" in tag:
-        kind, name, unit = "temperature", "Rear bearing temperature", "°C assumed — verify scale"
+        kind, name, unit = "temperature", "HZ temperature (rear bearing, provisional)", "°C assumed — verify scale"
     elif tag.endswith("_wd") or "_tt_zjs_" in tag:
         kind, name, unit = "temperature", "Temperature (location unverified)", "°C assumed — verify scale"
     elif re.search(r"_[xyz](sd|wy)$", tag) or tag.endswith("_cz_o"):

@@ -39,6 +39,26 @@ def test_empty_scope_is_explicit(app):
     assert not app.exception
     assert any("No performance records" in x.value for x in app.info)
 
+def test_hidden_temperature_shortcut_renders_original_january_values(app):
+    import base64
+    import json
+    import numpy as np
+    assert any("Priority history" in x.value for x in app.subheader)
+    assert any(x.value=="212.7" for x in app.metric)
+    [b for b in app.button if b.label=="Show temperature history · Plant A"][0].click().run()
+    assert not app.exception
+    assert app.session_state["view"]=="Equipment"
+    assert app.selectbox(key="period").value=="All equipment history"
+    assert app.selectbox(key="equipment_Plant A").value=="1_rohigh_pressure_pump_qz_temp_o"
+    spec=json.loads(app.get("plotly_chart")[0].proto.spec)
+    values=spec["data"][2]["y"]
+    if isinstance(values,dict):
+        values=np.frombuffer(base64.b64decode(values["bdata"]),dtype=values["dtype"])
+    assert sum(212<float(v)<213 for v in values if v is not None)==27
+    assert "2026-01-01" in str(spec["data"][2]["x"])
+    app.run()
+    assert app.selectbox(key="equipment_Plant A").value=="1_rohigh_pressure_pump_qz_temp_o"
+
 def test_fixed_recovery_is_a_metric_not_a_jitter_chart(app):
     app.selectbox(key="plant").select("Plant A").run()
     app.session_state["view"]="Water & quality";app.run()

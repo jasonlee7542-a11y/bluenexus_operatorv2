@@ -1,0 +1,28 @@
+/* Native Streamlit controls; accents are scoped to our named containers. */
+.st-key-brand {background: #ffffff; padding: 12px 16px; border-radius: 12px; width: fit-content;}
+[class*="st-key-kpi_"], [class*="st-key-panel_"], .st-key-next_action {
+    background: #ffffff; border-radius: 16px; padding: 20px;
+    border: 1px solid #dce5ed; box-shadow: 0 4px 16px #15344a05;
+}
+[class*="st-key-kpi_"] [data-testid="stMetricValue"] {
+    font-family: "Segoe UI", sans-serif; font-weight: 750; letter-spacing: -1.5px;
+    font-variant-numeric: tabular-nums;
+}
+.st-key-kpi_priority {border-top: 4px solid #c23c4a; background: #fff3f4;}
+.st-key-kpi_priority [data-testid="stMetricValue"] {color: #b82e40;}
+.st-key-kpi_investigate {border-top: 4px solid #b77916; background: #fff8eb;}
+.st-key-kpi_investigate [data-testid="stMetricValue"] {color: #93600e;}
+.st-key-kpi_data {border-top: 4px solid #187d98; background: #edf8fc;}
+.st-key-kpi_data [data-testid="stMetricValue"] {color: #12677e;}
+.st-key-next_action {border-left: 5px solid #b77916;}
+.st-key-panel_history {border-top: 4px solid #c23c4a;}
+.st-key-panel_history [data-testid="stMetricValue"] {color: #b82e40;}
+[class*="st-key-panel_plant"] {border-top: 4px solid #128c91;}
+[data-testid="stMetricLabel"] {font-weight: 600;}
+[data-testid="stPlotlyChart"] {background: white; border-radius: 14px; border: 1px solid #e1e8ee;}
+.st-key-view {background: white; padding: 6px; border: 1px solid #dce5ed; border-radius: 12px;}
+h1 {letter-spacing: -1.2px;}
+h2,h3 {letter-spacing: -.4px;}
+@media(max-width:640px) {
+    [class*="st-key-kpi_"], [class*="st-key-panel_"], .st-key-next_action {padding: 14px;}
+}

@@ -22,6 +22,7 @@ from bluenexus.service import VERSION,analyze,in_scope,energy_summary,analysis_b
 from bluenexus.workflow import CURRENT,OUTCOMES,recommendation,handoff,worklog_payload,import_worklog,timestamp
 
 st.set_page_config(page_title="BlueNexus | Operations review",page_icon=":material/water_drop:",layout="wide")
+st.html(ROOT/"assets/dashboard.css")
 VIEWS=["Operations","Investigations","Energy","Water & quality","Equipment","Data & methods"]
 for key,value in dict(view="Operations",plant="All plants",period="Performance period",reviews={},revision=0).items():
     st.session_state.setdefault(key,value)
@@ -34,6 +35,10 @@ def navigate(view,plant=None,case_id=None,period=None):
         st.session_state.focus_case=case_id
         st.session_state.case_type="All cases"
         st.session_state.case_priority=["Verify promptly","Investigate","Check data"]
+
+def show_equipment_history(plant,signal):
+    navigate("Equipment",plant,period="All equipment history")
+    st.session_state["equipment_"+plant]=signal
 
 @st.cache_data(show_spinner=False,max_entries=4)
 def prepare(blobs,version):
@@ -60,7 +65,8 @@ def badge(priority):
     st.badge(priority,icon=":material/priority_high:" if priority=="Verify promptly" else ":material/search:",color="red" if priority=="Verify promptly" else "orange" if priority=="Investigate" else "blue")
 
 with st.sidebar:
-    st.image(str(ROOT/"assets/bluenexus-logo.png"),width=170)
+    with st.container(key="brand"):
+        st.image(str(ROOT/"assets/bluenexus-logo.png"),width=170)
     st.caption("OPERATIONS REVIEW")
     st.selectbox("Plant",["All plants","Plant A","Plant B"],key="plant")
     st.selectbox("Review period",["Performance period","All equipment history","Latest 30 recorded days","Custom dates"],key="period")
@@ -68,7 +74,7 @@ with st.sidebar:
         st.caption("Upload all three files to replace the local dataset for this session.")
         uploaded=st.file_uploader("Challenge CSVs",type="csv",accept_multiple_files=True,key="source_uploads")
         st.caption("Expected filenames: "+", ".join(FILES))
-    st.caption("Historical daily records · no live plant connection")
+    st.badge("Historical data",icon=":material/history:",color="blue")
 
 blobs={}
 if uploaded:
@@ -116,66 +122,95 @@ if start>end:
     st.error("Start date must be on or before end date.");st.stop()
 with st.sidebar:
     st.caption(f"{start:%d %b %Y} — {end:%d %b %Y}")
-    st.caption(f"Latest equipment: {last:%d %b %Y}\n\nLatest performance: {performance_end:%d %b %Y}")
     st.button("Reset review scope",on_click=navigate,args=("Operations","All plants",None,"Performance period"),width="stretch")
     st.divider()
-    st.caption(f"{len(st.session_state.reviews)} saved review(s) in this session. Export the work log to retain them.")
+    st.caption(f"{len(st.session_state.reviews)} saved reviews · export to retain")
     st.download_button("Export work log",worklog_payload(st.session_state.reviews,result.fingerprint),"BlueNexus_work_log.json","application/json",width="stretch")
 
 daily=in_scope(result.daily,plant,start,end)
 equipment=in_scope(result.equipment,plant,start,end)
 cases=in_scope(result.cases,plant,start,end,episodes=True)
-st.segmented_control("Workspace",VIEWS,key="view",selection_mode="single",width="stretch")
+st.segmented_control("Workspace",VIEWS,key="view",selection_mode="single",width="stretch",label_visibility="collapsed")
 view=st.session_state.view or "Operations"
 st.title(view)
-st.caption(f"{plant} · {start:%d %b %Y} – {end:%d %b %Y} · Historical evidence; current condition requires verification")
+st.caption(f"{plant}   /   {start:%d %b} – {end:%d %b %Y}   /   Historical review")
+
+# Keep excluded priority evidence visible wherever an operator enters the app.
+outside=result.cases.loc[result.cases.plant.isin(plants)&result.cases.priority.eq("Verify promptly")&~result.cases.case_id.isin(cases.case_id)]
+def priority_history():
+    st.badge("Outside selected dates",icon=":material/history:",color="red")
+    for row in outside.loc[outside.code.eq("TEMPERATURE_ASSUMED_HIGH")].itertuples():
+        readings=result.equipment.loc[result.equipment.plant.eq(row.plant)&result.equipment.date.between(row.start,row.end),row.signal]
+        st.metric(f"{row.plant} · {row.asset} · QZ temperature" if "qz_temp" in row.signal else f"{row.plant} · {row.asset} · Temperature",f"{readings.max():.1f}",help="Original reported value. Celsius and scaling require confirmation.")
+        st.caption(f"{row.start:%d %b}–{row.end:%d %b %Y} · {row.days} days · Unit unverified")
+        st.button(f"Show temperature history · {row.plant}",on_click=show_equipment_history,args=(row.plant,row.signal),key="history_"+row.case_id,width="stretch")
+    st.button("Review priority history",on_click=navigate,args=("Investigations",plant,outside.iloc[0].case_id,"All equipment history"),width="stretch")
+    st.caption("Historical episode · resolution unknown")
+
+if len(outside) and view!="Operations":
+    with st.expander(f":material/history: {len(outside)} priority episode(s) outside these dates · view history"):
+        priority_history()
 
 if view=="Operations":
-    st.write("Find the next investigation, understand the evidence and prepare a focused response.")
     c1,c2,c3=st.columns(3)
-    c1.metric("Verify promptly",str(cases.priority.eq("Verify promptly").sum()),border=True)
-    c2.metric("Process / equipment cases",str(cases.family.ne("data").sum()),border=True)
-    c3.metric("Data consistency cases",str(cases.family.eq("data").sum()),border=True)
-    st.caption("Counts describe historical rule episodes in this scope. They are not unresolved alarms; categories can overlap.")
+    with c1,st.container(key="kpi_priority"):
+        st.metric("Verify promptly",str(cases.priority.eq("Verify promptly").sum()),help="Historical episodes in the selected dates. Not live or unresolved alarms.")
+        st.caption(":material/priority_high: Priority checks")
+    with c2,st.container(key="kpi_investigate"):
+        st.metric("Process & equipment",str(cases.family.ne("data").sum()),help="Historical episodes; may overlap priority checks.")
+        st.caption(":material/troubleshoot: Investigation queue")
+    with c3,st.container(key="kpi_data"):
+        st.metric("Data checks",str(cases.family.eq("data").sum()),help="Historical consistency episodes, not confirmed faults.")
+        st.caption(":material/fact_check: Measurement confidence")
     main=cases.loc[cases.family.ne("data")]
+    focus,history=st.columns([2,1],gap="medium")
+    with history,st.container(key="panel_history"):
+        st.subheader("Priority history")
+        if len(outside): priority_history()
+        else: st.caption("No priority episodes outside this scope.")
+    with focus:
+        st.subheader("Next investigation")
     if len(main):
         top=main.iloc[0]
-        with st.container(border=True):
+        with focus,st.container(key="next_action"):
             left,right=st.columns([3,1],vertical_alignment="center")
             with left:
                 badge(top.priority)
                 st.subheader(top.title)
                 st.write(f"**{top.plant} · {top.asset}** · {top.start:%d %b}–{top.end:%d %b %Y}")
-                st.write("**First check:** "+playbook(top.family,top.asset)["remote"][0])
+                with st.expander("First check"):
+                    st.write(playbook(top.family,top.asset)["remote"][0])
             with right:
                 st.button("Open investigation",type="primary",on_click=navigate,args=("Investigations",top.plant,top.case_id),width="stretch")
-        st.subheader("Investigation queue")
-        st.dataframe(queue_table(main.head(8)),hide_index=True,width="stretch",column_config={"Investigation":st.column_config.TextColumn(width="large"),"Days":st.column_config.NumberColumn(width="small")})
-        st.button(f"Browse all {len(cases)} cases",on_click=navigate,args=("Investigations",),key="browse")
+        with focus:
+            st.dataframe(queue_table(main.head(4)),hide_index=True,width="stretch",column_config={"Investigation":st.column_config.TextColumn(width="large"),"Days":st.column_config.NumberColumn(width="small")})
+            st.button(f"Browse all {len(cases)} cases",on_click=navigate,args=("Investigations",),key="browse")
     else:
         st.info("No process/equipment rule episodes intersect these dates. Check available channels and data issues before drawing a health conclusion.")
         st.button("Review data cases",on_click=navigate,args=("Investigations",))
-    outside=result.cases.loc[result.cases.plant.isin(plants)&result.cases.priority.eq("Verify promptly")&~result.cases.case_id.isin(cases.case_id)]
-    if len(outside):
-        st.warning(f"{len(outside)} priority episode(s) fall outside this date range. Their resolution is unknown.")
-        st.button("Review priority history",on_click=navigate,args=("Investigations",plant,outside.iloc[0].case_id,"All equipment history"))
     with st.expander("Guided walkthrough · three decisions"):
         st.caption("Each shortcut opens historical evidence. Current-condition answers remain yours to verify.")
         for name,which,code,date in [("Why high SEC does not automatically justify a visit","Plant A","LOW_THROUGHPUT_ENERGY","2026-08-31"),("Reconcile a large delivery discrepancy","Plant B","DELIVERY_DISCREPANCY","2026-08-11"),("Verify an extreme temperature reading","Plant A","TEMPERATURE_ASSUMED_HIGH","2026-01-01")]:
             found=result.cases.loc[result.cases.plant.eq(which)&result.cases.code.eq(code)&result.cases.start.le(pd.Timestamp(date))&result.cases.end.ge(pd.Timestamp(date))]
             if len(found): st.button(name,on_click=navigate,args=("Investigations",which,found.iloc[0].case_id,"All equipment history"),key="story_"+code)
-    st.subheader("Production context")
-    summaries=[]
-    for name in plants:
+    st.subheader("Production snapshot")
+    for col,name in zip(st.columns(len(plants)),plants):
         part=daily.loc[daily.plant.eq(name)]; s=energy_summary(part)
-        summaries.append({"Plant":name,"Product water · m³":display(s["water"],0),"Electricity · kWh":display(s["energy"],0),"Weighted SEC · kWh/m³":display(s["sec"],3),"Matched days":s["days"]})
-    st.dataframe(pd.DataFrame(summaries),hide_index=True,width="stretch")
-    st.caption("Weighted SEC = total electricity ÷ total product on matching valid dates. Plant totals reflect different production scales.")
+        with col,st.container(key="panel_plant_"+name):
+            st.markdown(f"**:material/water_drop: {name}**")
+            a,b=st.columns(2)
+            a.metric("Product water · m³",display(s["water"],0))
+            b.metric("Energy · kWh/m³",display(s["sec"],3),help="Total electricity ÷ product water on matching valid dates.")
+            if not part.empty:
+                fig=lines(part,["effluent_volume_m3"]);fig.update_layout(height=180,showlegend=False,margin=dict(l=10,r=10,t=10,b=10))
+                plot(fig,key="snapshot_"+name)
+            else: st.caption("No performance records in this scope.")
 
 elif view=="Investigations":
+    st.session_state.setdefault("case_priority",["Verify promptly","Investigate","Check data"])
     with st.expander("Filter the investigation queue"):
         family=st.selectbox("Case type",["All cases","Process & equipment","Data consistency"],key="case_type")
-        priority=st.multiselect("Review priority",["Verify promptly","Investigate","Check data"],default=["Verify promptly","Investigate","Check data"],key="case_priority")
+        priority=st.multiselect("Review priority",["Verify promptly","Investigate","Check data"],key="case_priority")
     available=cases.loc[cases.priority.isin(priority)]
     if family=="Process & equipment": available=available.loc[available.family.ne("data")]
     elif family=="Data consistency": available=available.loc[available.family.eq("data")]
@@ -198,15 +233,20 @@ elif view=="Investigations":
     badge(row.priority)
     st.subheader(row.title)
     st.caption(f"{row.plant} · {row.asset} (candidate mapping) · {row.start:%d %b}–{row.end:%d %b %Y} · {row.days} qualifying day(s)")
-    with st.container(border=True):
+    with st.container(key="next_action"):
         st.markdown(f"**Next action: {action}**")
-        st.write(reason)
+        with st.expander("Decision logic"):
+            st.write(reason)
     left,right=st.columns([1.35,1],gap="large")
     with left:
-        st.markdown("**Why this case exists**")
-        st.write(row.threshold)
-        st.table(evidence_table(row.evidence,row))
-        st.caption(f"Evidence above: last qualifying day ({row.end:%d %b %Y}). {row.confidence}")
+        a,b=st.columns(2)
+        a.metric("Last qualifying reading",display(row.value,2),help=row.unit)
+        b.metric("Qualifying days",str(row.days))
+        st.caption(row.unit)
+        with st.expander("Evidence & threshold"):
+            st.write(row.threshold)
+            st.table(evidence_table(row.evidence,row))
+            st.caption(f"Last qualifying day: {row.end:%d %b %Y}. {row.confidence}")
         if row.family=="energy":
             matched=result.daily.loc[result.daily.plant.eq(row.plant)&result.daily.date.eq(row.end)]
             if len(matched):
@@ -221,18 +261,19 @@ elif view=="Investigations":
             fig=lines(context,[row.signal])
             fig.add_vrect(x0=row.start,x1=row.end+pd.Timedelta(days=1),fillcolor=AMBER,opacity=.10,line_width=0,layer="below")
             plot(fig)
-            st.caption("Shading marks qualifying days. Context includes up to 14 days before and 7 after; it may extend beyond the review filter. The last flag is not a repair date.")
+            st.caption("Shaded: flagged episode · includes surrounding dates · not a repair timeline")
     with right:
         st.markdown("**Remote checks · start here**")
-        for i,step in enumerate(book["remote"],1): st.write(f"{i}. {step}")
-        with st.expander("Possible explanations and evidence still needed",expanded=True):
+        st.info(book["remote"][0],icon=":material/search:")
+        with st.expander("Remaining checks"):
+            for i,step in enumerate(book["remote"][1:],2): st.write(f"{i}. {step}")
+        with st.expander("Possible causes & missing evidence"):
             for cause in book["causes"]: st.write("• "+cause)
             st.caption("These are hypotheses, not diagnoses.")
             st.write("**Still needed:** "+book["missing"])
-    st.divider()
     t1,t2,t3=st.tabs(["Record verification","Technician handoff","Daily evidence"])
     with t1:
-        st.caption("Save your findings before changing pages. Session records can be exported and restored through the work log.")
+        st.caption("Save before leaving · export work log to retain")
         with st.form("review_"+selected+"_"+str(st.session_state.revision)):
             l,r=st.columns(2)
             current=l.selectbox("Current condition",CURRENT,index=CURRENT.index(review.get("current",CURRENT[0])))
@@ -265,48 +306,45 @@ elif view=="Investigations":
         st.download_button("Download daily rule evidence",detail.to_csv(index=False).encode(),f"{selected}_evidence.csv","text/csv")
 
 elif view=="Energy":
-    st.write("Separate production effects from electricity that remains unusually high at comparable output.")
     if daily.empty: st.info("No performance records in these dates. Select the performance period.")
     for name in plants:
         part=daily.loc[daily.plant.eq(name)]
         if part.empty: continue
         st.subheader(name)
         s=energy_summary(part);a,b,c=st.columns(3)
-        a.metric("Weighted energy per m³",display(s["sec"],3)+" kWh/m³",border=True)
-        b.metric("Above load estimate by >20%",str(part.energy_load_residual_fraction.gt(.2).sum())+" days",border=True)
-        c.metric("Similar-output comparison",f"{part.peer_gap_fraction.notna().sum()}/{len(part)} days",border=True)
-        st.caption("The day count is descriptive; the load-model investigation rule requires two consecutive days. Missing comparisons are unassessed.")
-        st.markdown("**1 · How much energy did each unit of product require?**")
-        plot(lines(part,["sec_kwh_m3","planned_specific_energy_kwh_m3","peer_median_sec"]),key="sec_"+name)
-        st.markdown("**2 · Was electricity unusual after accounting for output?**")
-        plot(lines(part,["daily_electricity_kwh","expected_energy_kwh"]),key="load_"+name)
-        residual=lines(part,["energy_load_residual_fraction"],"Electricity versus estimate · %")
-        residual.add_hline(y=20,line_dash="dash",line_color=AMBER,annotation_text="Provisional +20% review")
-        residual.add_hline(y=0,line_color="#acbdc9")
-        plot(residual,key="residual_"+name)
-        st.caption(f"Load estimate available on {part.expected_energy_kwh.notna().sum()}/{len(part)} days. Fitted on earlier eligible observations only; it controls for output, not feedwater, cleaning or runtime.")
-        with st.expander("Daily comparisons, peer dates and plan totals"):
-            a,b=st.columns(2);a.metric("Net energy versus plan",display(s["net"],0)+" kWh");b.metric("Above-plan days only",display(s["positive"],0)+" kWh")
+        a.metric("Energy · kWh/m³",display(s["sec"],3),border=True,help="Weighted: electricity ÷ product water on matching valid dates.")
+        b.metric("Days >20% above estimate",str(part.energy_load_residual_fraction.gt(.2).sum()),border=True,help="Descriptive count. An investigation requires two consecutive days.")
+        c.metric("Peer coverage",f"{part.peer_gap_fraction.notna().sum()}/{len(part)}",border=True,help="Days with enough earlier similar-output comparisons. Missing days are unassessed.")
+        intensity,load=st.tabs(["Energy per m³","Production-adjusted energy"])
+        with intensity:
+            plot(lines(part,["sec_kwh_m3","planned_specific_energy_kwh_m3","peer_median_sec"]),key="sec_"+name)
+            st.caption("Solid: actual · dotted: supplied target / earlier similar-output reference")
+        with load:
+            plot(lines(part,["daily_electricity_kwh","expected_energy_kwh"]),key="load_"+name)
+            residual=lines(part,["energy_load_residual_fraction"],"Electricity versus estimate · %")
+            residual.add_hline(y=20,line_dash="dash",line_color=AMBER,annotation_text="Review +20%")
+            residual.add_hline(y=0,line_color="#acbdc9")
+            plot(residual,key="residual_"+name)
+            st.caption(f"Estimate coverage: {part.expected_energy_kwh.notna().sum()}/{len(part)} days · earlier observations only")
+        with st.expander("Daily evidence & target definitions"):
+            st.write("Supplied target = reference from the challenge CSV. Historical estimate = fitted from earlier output and energy. Neither establishes a fault; output adjustment does not account for feedwater, cleaning or runtime.")
+            a,b=st.columns(2);a.metric("Net energy versus target",display(s["net"],0)+" kWh");b.metric("Above-target days only",display(s["positive"],0)+" kWh")
             st.caption("These are reference gaps, not demonstrated or attainable savings.")
             st.dataframe(part[["date","effluent_volume_m3","daily_electricity_kwh","sec_kwh_m3","expected_energy_kwh","energy_load_residual_fraction","peer_count","peer_gap_fraction","peer_dates"]],hide_index=True,width="stretch")
         st.button("Review "+name+" investigations",on_click=navigate,args=("Investigations",name),key="energy_cases_"+name)
-        st.divider()
     with st.expander("How the two comparisons work"):
         st.write("Similar-output reference: median SEC on at least five earlier, non-standby-indicated days within ±20% of output over the prior 60 days. Load model: nonnegative fixed electricity plus a nonnegative production-dependent term, fitted on at least 14 earlier eligible observations and refreshed every seven rows. Neither comparison establishes a cause.")
 
 elif view=="Water & quality":
-    st.write("Reconcile water measurements and inspect quality evidence before attributing a process fault.")
     if daily.empty: st.info("No performance records in these dates.")
     for name in plants:
         part=daily.loc[daily.plant.eq(name)]
         if part.empty: continue
         st.subheader(name)
         if name=="Plant A":
-            st.info("Plant A's fixed 75% volume ratio is reported context. It is not independent evidence of membrane health.")
-            st.metric("Reported volume recovery",display(part.recovery_calculated.median()*100,1)+"%",border=True)
+            st.metric("Reported volume recovery",display(part.recovery_calculated.median()*100,1)+"%",border=True,help="Fixed reported volume ratio; not independent evidence of membrane health.")
         else:
             plot(lines(part,["recovery_calculated","equipment_ro_recovery"],"Recovery · %"),key="recovery_"+name)
-        st.caption("Whole-plant and RO recovery have different potential measurement boundaries; disagreement needs reconciliation.")
         st.markdown("**Supply and customer volumes**")
         plot(lines(part,["reclaimed_supply_volume_m3","customer_end_volume_m3"]),key="delivery_"+name)
         valid=part.delivery_gap_fraction.dropna()
@@ -320,16 +358,15 @@ elif view=="Water & quality":
         with right:
             st.markdown("**Conductivity passage proxy**")
             plot(lines(part,["salt_passage_proxy"]),key="conductivity_"+name)
-        st.caption("Shading is a provisional pH review interval, not a compliance limit. Conductivity is a plant-level proxy with unverified sample locations.")
+        with st.expander("How to interpret water & quality"):
+            st.write("Recovery measurements may have different boundaries. Plant A's fixed 75% ratio does not establish membrane health. pH shading is a provisional review interval, not a compliance limit. Conductivity is a proxy; sample locations need confirmation.")
         with st.expander("Chemical records and reporting coverage"):
             st.write(f"NaOH recorded on {part.actual_naoh_dose_reported.notna().sum()}/{len(part)} dates. Dose units are unverified; missing records are not zero dose.")
             plot(lines(part,["actual_naoh_dose_reported","planned_naoh_dose_reported"]),key="naoh_"+name)
             st.caption("Sparse records may be reconciliation entries. Coincidence with pH does not establish dosing causality.")
         st.button("Review "+name+" investigations",on_click=navigate,args=("Investigations",name),key="water_cases_"+name)
-        st.divider()
 
 elif view=="Equipment":
-    st.write("Inspect mapped signals in original reported units, with historical bands and investigation markers.")
     if equipment.empty: st.info("No equipment records in these dates.")
     for name in plants:
         full=result.equipment.loc[result.equipment.plant.eq(name)]
@@ -343,15 +380,23 @@ elif view=="Equipment":
         supported=priority_tags+[s for s in supported if s not in priority_tags]
         chosen=st.selectbox("Measurement · "+name,supported,format_func=lambda x:tag_info(x)["asset"]+" · "+tag_info(x)["label"]+" · "+x,key="equipment_"+name)
         info=tag_info(chosen)
-        st.caption(info["confidence"]+". Electrical registers are not automatically rescaled.")
         screened=screen(full.set_index("date")[chosen],result.settings["equipment_baseline_days"],result.settings["equipment_iqr_multiplier"])
         scoped=screened.loc[screened.date.between(pd.Timestamp(start),pd.Timestamp(end))]
         marked=result.events.loc[result.events.plant.eq(name)&result.events.signal.eq(chosen)&result.events.date.between(pd.Timestamp(start),pd.Timestamp(end))]
         high=120 if info["kind"]=="temperature" and scoped.value.max()>=100 else None
+        a,b,c=st.columns(3)
+        observed=scoped.loc[scoped.value.notna()]
+        a.metric("Latest in range",display(observed.iloc[-1].value,2) if len(observed) else "Unavailable",border=True,help=info["unit"])
+        b.metric("Peak in range",display(scoped.value.max(),2),border=True,help=info["unit"])
+        c.metric("Flagged days",str(marked.date.nunique()),border=True,help="Days meeting an investigation rule. Not confirmed faults.")
+        st.caption(info["unit"]+" · Original reported values")
         plot(equipment_chart(scoped,info,marked,high),key="equipment_chart_"+name)
-        if info["kind"]=="temperature":
-            st.caption("Conditional absolute review: reported value >120 only if Celsius and scaling are confirmed. The statistical trend uses its own earlier baseline.")
-        st.caption(f"{int(scoped.flag.sum())} statistical deviations; {int(scoped.status.isin(['Within statistical band','Statistical deviation']).sum())}/{len(scoped)} scored calendar days. Flat references and missing readings are unscored; the band is not an operating limit.")
+        st.caption("Click ‘Prior statistical band’ in the legend to show the reference range.")
+        with st.expander("Units, thresholds & coverage"):
+            st.write(info["confidence"]+". Electrical registers are not automatically rescaled.")
+            if info["kind"]=="temperature":
+                st.write("Absolute review above 120 applies only if Celsius and scaling are confirmed.")
+            st.caption(f"{int(scoped.flag.sum())} statistical deviations; {int(scoped.status.isin(['Within statistical band','Statistical deviation']).sum())}/{len(scoped)} scored calendar days. Flat references and missing readings are unscored; the band is not an operating limit.")
         relevant=cases.loc[cases.plant.eq(name)&cases.signal.eq(chosen)]
         if len(relevant):
             st.button("Open linked investigation · "+name,on_click=navigate,args=("Investigations",name,relevant.iloc[0].case_id),key="linked_"+name)
@@ -362,7 +407,6 @@ elif view=="Equipment":
             for signal in extra:
                 plot(lines(part,[signal]),key="related_chart_"+name+signal)
             st.caption("Charts share the date interval and retain each measurement's own unit. Similar shapes do not establish causation.")
-        st.divider()
 
 elif view=="Data & methods":
     st.write("Inspect source coverage, assumptions and the calculation trail. Restore a saved work log here.")
@@ -406,5 +450,4 @@ elif view=="Data & methods":
     st.download_button("Download reproducible analysis bundle",analysis_bundle(result),"BlueNexus_analysis.zip","application/zip",type="primary")
     st.caption("The analysis bundle includes derived plant data and must follow the dataset's confidentiality restrictions.")
 
-st.divider()
-st.caption(f"BlueNexus Operations Review · v{VERSION} · Historical decision support · No autonomous control or dispatch")
+st.caption(f"BlueNexus · v{VERSION} · Historical decision support")

@@ -1,0 +1,43 @@
+[theme]
+base = "light"
+primaryColor = "#087f8c"
+backgroundColor = "#f4f7fa"
+secondaryBackgroundColor = "#eaf0f5"
+textColor = "#173349"
+font = "sans-serif"
+headingFont = "Montserrat"
+baseFontSize = 15
+metricValueFontWeight = 700
+metricValueFontSize = "2.4rem"
+paddingTop = "2rem"
+headingFontSizes = ["2.35rem", "1.35rem", "1.1rem", "1rem", "0.9rem", "0.85rem"]
+borderColor = "#d4e2eb"
+dataframeHeaderBackgroundColor = "#e6f3f9"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "0.65rem"
+buttonRadius = "0.5rem"
+chartCategoricalColors = ["#002e52", "#1688aa", "#a15c00", "#7259a2"]
+redColor = "#b53737"
+orangeColor = "#a15c00"
+greenColor = "#24754b"
+
+[theme.sidebar]
+backgroundColor = "#102e46"
+secondaryBackgroundColor = "#1c405a"
+textColor = "#eef5fa"
+primaryColor = "#47c6ce"
+borderColor = "#38546a"
+
+[[theme.fontFaces]]
+family = "Montserrat"
+url = "app/static/fonts/Montserrat-Variable.ttf"
+weight = "100 900"
+style = "normal"
+
+[server]
+enableStaticServing = true
+maxUploadSize = 20
+
+[browser]
+gatherUsageStats = false

@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.review/
+.venv/
+.env
+.streamlit/secrets.toml
+data/raw/*.csv
+*.zip
+*_work_log.json
+*_handoff.md
+outputs/
