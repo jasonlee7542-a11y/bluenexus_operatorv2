@@ -6,7 +6,7 @@ PyArrow 26.0.0. Direct runtime dependencies are pinned in requirements.txt.
 
 ## Automated checks
 
-17 automated checks:
+18 automated checks:
 
 - Actual Plant A 31 August energy arithmetic, historical load residual and missing
   peer comparison agree with independent calculations.
@@ -25,6 +25,8 @@ PyArrow 26.0.0. Direct runtime dependencies are pinned in requirements.txt.
 - Analysis archive contains its provenance and source files retain their hashes.
 - All six views render for All plants, Plant A and Plant B.
 - Guided links retain the selected investigation through reruns.
+- Investigation filters and out-of-range flags remain accessible in the sidebar;
+  filtering to an empty queue preserves the controls needed to recover.
 - Browse all cases expands every in-scope row on Operations and collapses back
   to the four-row preview without navigating away.
 - Equipment-only date ranges do not fabricate performance data.
@@ -48,6 +50,16 @@ Headless Microsoft Edge at 1440×1000 and a 390×844 mobile viewport:
   explanations. Inspected desktop and mobile layouts and the QZ history shortcut.
 - Equipment bands are optional legend layers, so extreme statistical bounds do
   not compress the initial raw-value chart. Original readings remain unchanged.
+
+## Investigation layout references
+
+- [IBM Carbon disclosure patterns](https://www.carbondesignsystem.com/building-blocks/core/patterns/disclosures):
+  secondary filters and interactive details in compact popovers.
+- [Grafana dashboard guidance](https://grafana.com/docs/grafana/latest/visualizations/dashboards/build-dashboards/best-practices/):
+  organise the page around the operational question and reduce cognitive load.
+
+Applied as sidebar queue controls, one case selector, evidence and action columns,
+and local popovers for supporting details. No filters or historical evidence were removed.
 
 The source directories used for comparison were not modified by this build. No
 app or repository was published. Streamlit Community Cloud/Linux deployment has

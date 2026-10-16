@@ -83,6 +83,21 @@ def test_fixed_recovery_is_a_metric_not_a_jitter_chart(app):
     assert recovery[0].value=="75.0%"
     assert not app.exception
 
+def test_investigation_controls_stay_in_sidebar_and_filter(app):
+    app.session_state["view"]="Investigations"
+    app.run()
+    assert not app.exception
+    assert app.sidebar.selectbox(key="case_type").value=="All cases"
+    assert any(b.label=="View January readings · Plant A" for b in app.sidebar.button)
+    assert not any("Flagged readings outside" in x.label for x in app.main.expander)
+    app.sidebar.selectbox(key="case_type").select("Data consistency").run()
+    assert not app.exception
+    assert app.session_state["view"]=="Investigations"
+    assert app.selectbox(key="selected_case").value
+    app.sidebar.multiselect(key="case_priority").set_value([]).run()
+    assert any("No cases match" in x.value for x in app.info)
+    assert app.sidebar.selectbox(key="case_type")
+
 def test_save_evidence_and_revisit_preserves_review(app):
     [b for b in app.button if b.label=="Reconcile a large delivery discrepancy"][0].click().run()
     selected=app.selectbox(key="selected_case").value

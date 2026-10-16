@@ -73,6 +73,7 @@ with st.sidebar:
     st.caption("OPERATIONS REVIEW")
     st.selectbox("Plant",["All plants","Plant A","Plant B"],key="plant")
     st.selectbox("Review period",["Performance period","All equipment history","Latest 30 recorded days","Custom dates"],key="period")
+    investigation_tools=st.container()
     with st.expander("Data inputs"):
         st.caption("Upload all three files to replace the local dataset for this session.")
         uploaded=st.file_uploader("Challenge CSVs",type="csv",accept_multiple_files=True,key="source_uploads")
@@ -135,8 +136,9 @@ equipment=in_scope(result.equipment,plant,start,end)
 cases=in_scope(result.cases,plant,start,end,episodes=True)
 st.segmented_control("Workspace",VIEWS,key="view",selection_mode="single",width="stretch",label_visibility="collapsed")
 view=st.session_state.view or "Operations"
-st.title(view)
-st.caption(f"{plant}   /   {start:%d %b} – {end:%d %b %Y}   /   Historical review")
+if view!="Investigations":
+    st.title(view)
+    st.caption(f"{plant}   /   {start:%d %b} – {end:%d %b %Y}   /   Historical review")
 
 # Keep excluded priority evidence visible wherever an operator enters the app.
 outside=result.cases.loc[result.cases.plant.isin(plants)&result.cases.priority.eq("Verify promptly")&~result.cases.case_id.isin(cases.case_id)]
@@ -153,7 +155,7 @@ def priority_history():
         st.button("Review flagged episodes",on_click=navigate,args=("Investigations",plant,outside.iloc[0].case_id,"All equipment history"))
     st.caption("Resolution unknown · no repair confirmation in this dataset")
 
-if len(outside):
+if len(outside) and view!="Investigations":
     first_hidden=outside.iloc[0]
     hidden_label=f"Flagged readings outside these dates · {first_hidden.plant} · {first_hidden.start:%b %Y}"
     if first_hidden.code=="TEMPERATURE_ASSUMED_HIGH":
@@ -224,12 +226,19 @@ if view=="Operations":
 
 elif view=="Investigations":
     st.session_state.setdefault("case_priority",["Verify promptly","Investigate","Check data"])
-    with st.expander("Filter the investigation queue"):
-        family=st.selectbox("Case type",["All cases","Process & equipment","Data consistency"],key="case_type")
-        priority=st.multiselect("Review priority",["Verify promptly","Investigate","Check data"],key="case_priority")
+    with investigation_tools:
+        active_filters=int(st.session_state.get("case_type","All cases")!="All cases")+int(set(st.session_state.case_priority)!={"Verify promptly","Investigate","Check data"})
+        with st.popover(f"Queue filters{f' · {active_filters} active' if active_filters else ''}",icon=":material/filter_list:",width="stretch",key="queue_filters"):
+            family=st.selectbox("Case type",["All cases","Process & equipment","Data consistency"],key="case_type")
+            priority=st.multiselect("Review priority",["Verify promptly","Investigate","Check data"],key="case_priority")
+        if len(outside):
+            with st.popover(f"Outside dates · {len(outside)} flagged",icon=":material/history:",width="stretch",key="outside_dates"):
+                priority_history()
     available=cases.loc[cases.priority.isin(priority)]
     if family=="Process & equipment": available=available.loc[available.family.ne("data")]
     elif family=="Data consistency": available=available.loc[available.family.eq("data")]
+    with investigation_tools:
+        st.caption(f"{len(available)} of {len(cases)} cases · {start:%d %b}–{end:%d %b %Y}")
     focus=st.session_state.pop("focus_case",None)
     if focus and focus not in available.case_id.values and focus in cases.case_id.values:
         available=cases
@@ -241,36 +250,25 @@ elif view=="Investigations":
     if st.session_state.get("selected_case") not in options: st.session_state.selected_case=options[0]
     selected=st.selectbox("Investigation",options,
                           format_func=lambda x: f"{available.loc[available.case_id.eq(x)].iloc[0].priority} · {available.loc[available.case_id.eq(x)].iloc[0].plant} · {available.loc[available.case_id.eq(x)].iloc[0].start:%d %b %Y} · {available.loc[available.case_id.eq(x)].iloc[0].title}",
-                          key="selected_case")
+                          key="selected_case",label_visibility="collapsed")
     row=available.loc[available.case_id.eq(selected)].iloc[0]
     book=playbook(row.family,row.asset)
     review=st.session_state.reviews.get(selected,{})
     action,reason=recommendation(row,review)
-    badge(row.priority)
     st.subheader(row.title)
-    st.caption(f"{row.plant} · {row.asset} (candidate mapping) · {row.start:%d %b}–{row.end:%d %b %Y} · {row.days} qualifying day(s)")
-    with st.container(key="next_action"):
-        st.markdown(f"**Next action: {action}**")
-        with st.expander("Decision logic"):
-            st.write(reason)
+    with st.container(horizontal=True,vertical_alignment="center"):
+        badge(row.priority)
+        st.caption(f"{row.plant} · {row.asset} (candidate) · {row.start:%d %b}–{row.end:%d %b %Y}")
     left,right=st.columns([1.35,1],gap="large")
     with left:
-        a,b=st.columns(2)
+        a,b,c=st.columns([1.4,1,1],vertical_alignment="bottom")
         a.metric("Last qualifying reading",display(row.value,2),help=row.unit)
         b.metric("Qualifying days",str(row.days))
-        st.caption(row.unit)
-        with st.expander("Evidence & threshold"):
+        with c,st.popover("Evidence",icon=":material/fact_check:"):
             st.write(row.threshold)
             st.table(evidence_table(row.evidence,row))
             st.caption(f"Last qualifying day: {row.end:%d %b %Y}. {row.confidence}")
-        if row.family=="energy":
-            matched=result.daily.loc[result.daily.plant.eq(row.plant)&result.daily.date.eq(row.end)]
-            if len(matched):
-                e=matched.iloc[0]
-                if pd.notna(e.energy_load_residual_fraction):
-                    st.info(f"Production-adjusted view: electricity was {e.energy_load_residual_fraction:+.1%} versus the historical load estimate. The provisional excess-energy threshold is +20%.")
-                if pd.isna(e.peer_gap_fraction):
-                    st.caption(f"Similar-output comparison unavailable: {int(e.peer_count)} earlier peers; at least 5 required. An unavailable comparison is not a healthy result.")
+        st.caption(row.unit)
         origin=result.equipment if row.signal in result.equipment else result.daily
         context=origin.loc[origin.plant.eq(row.plant)&origin.date.between(row.start-pd.Timedelta(days=14),row.end+pd.Timedelta(days=7))]
         if row.signal in context and context[row.signal].notna().any():
@@ -279,6 +277,17 @@ elif view=="Investigations":
             plot(fig)
             st.caption("Shaded: flagged episode · includes surrounding dates · not a repair timeline")
     with right:
+        st.markdown(f"**Next action: {action}**")
+        with st.popover("Decision logic",icon=":material/info:"):
+            st.write(reason)
+            if row.family=="energy":
+                matched=result.daily.loc[result.daily.plant.eq(row.plant)&result.daily.date.eq(row.end)]
+                if len(matched):
+                    e=matched.iloc[0]
+                    if pd.notna(e.energy_load_residual_fraction):
+                        st.write(f"Electricity: {e.energy_load_residual_fraction:+.1%} versus the historical load estimate; provisional threshold +20%.")
+                    if pd.isna(e.peer_gap_fraction):
+                        st.caption(f"Similar-output comparison unavailable: {int(e.peer_count)} earlier peers; at least 5 required.")
         st.markdown("**Remote checks · start here**")
         st.info(book["remote"][0],icon=":material/search:")
         with st.expander("Remaining checks"):
