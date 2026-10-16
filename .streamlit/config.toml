@@ -23,11 +23,13 @@ orangeColor = "#a15c00"
 greenColor = "#24754b"
 
 [theme.sidebar]
-backgroundColor = "#102e46"
-secondaryBackgroundColor = "#1c405a"
-textColor = "#eef5fa"
-primaryColor = "#47c6ce"
-borderColor = "#38546a"
+backgroundColor = "#c5e9f5"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#002e52"
+primaryColor = "#087f8c"
+font = "Montserrat"
+headingFont = "Montserrat"
+borderColor = "#a7d8e9"
 
 [[theme.fontFaces]]
 family = "Montserrat"

@@ -17,7 +17,7 @@ py -3.13 -m venv .venv
 
 On macOS/Linux, use `python3.13`, then `.venv/bin/python` for the last two commands.
 The three supplied CSVs can be placed in `data/raw/`, or uploaded together through
-**Data inputs** in the sidebar. The upload replaces the full dataset for that
+**Data & session** in the sidebar. The upload replaces the full dataset for that
 browser session. Restarting/reloading a hosted session may require re-uploading.
 
 ## GitHub and Streamlit Community Cloud
@@ -31,7 +31,7 @@ browser session. Restarting/reloading a hosted session may require re-uploading.
    If uploading the entire folder instead, set the main path to
    `BlueNexus_Unified/app.py`; repository-root contents are recommended.
 3. Deploy. No API keys, secrets, LLM service or external database are required.
-4. Open the app and upload all three CSVs in **Data inputs**. The ZIP intentionally
+4. Open the app and upload all three CSVs in **Data & session**. The ZIP intentionally
    contains no plant dataset. A public code repository does not authorize public
    distribution of the challenge data; use appropriate app access controls.
 5. Confirm the date coverage, open each walkthrough and download a sample handoff

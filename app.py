@@ -76,16 +76,23 @@ def badge(priority):
 
 with st.sidebar:
     with st.container(key="brand"):
-        st.image(str(ROOT/"assets/bluenexus-logo.png"),width=170)
-    st.caption("OPERATIONS REVIEW")
+        st.image(str(ROOT/"assets/bluenexus-logo.png"),width=205)
+    st.markdown("**Review filters**")
     st.selectbox("Plant",["All plants","Plant A","Plant B"],key="plant")
-    st.selectbox("Review period",["Performance period","All equipment history","Latest 30 recorded days","Custom dates"],key="period")
+    st.selectbox("Date range",["Performance period","All equipment history","Latest 30 recorded days","Custom dates"],key="period",
+                 format_func=lambda value:{"Performance period":"Performance period · Jul–Aug","All equipment history":"All available dates · Jan–Sep","Latest 30 recorded days":"Latest 30 days"}.get(value,value))
+    custom_dates_slot=st.container()
+    reset_slot=st.container()
     investigation_tools=st.container()
-    with st.expander("Data inputs"):
+    coverage_slot=None
+    with st.expander("Data coverage"):
+        coverage_slot=st.container()
+    session_slot=None
+    with st.expander("Data & session"):
         st.caption("Upload all three files to replace the local dataset for this session.")
         uploaded=st.file_uploader("Challenge CSVs",type="csv",accept_multiple_files=True,key="source_uploads")
-        st.caption("Expected filenames: "+", ".join(FILES))
-    st.badge("Historical data",icon=":material/history:",color="blue")
+        st.caption("Expected: "+", ".join(FILES))
+        session_slot=st.container()
 
 blobs={}
 if uploaded:
@@ -99,7 +106,7 @@ else:
     blobs={name:(ROOT/"data/raw"/name).read_bytes() for name in FILES if (ROOT/"data/raw"/name).is_file()}
 if set(blobs)!=set(FILES):
     st.title("BlueNexus operations review")
-    st.write("Load the three challenge CSVs using **Data inputs** in the sidebar to begin.")
+    st.write("Load the three challenge CSVs using **Data & session** in the sidebar to begin.")
     st.info("The GitHub package contains the application. Your plant dataset is loaded separately.")
     st.caption("For local use, place the files in data/raw/. See README.md for deployment instructions.")
     st.stop()
@@ -125,22 +132,29 @@ if st.session_state.period=="Performance period": start,end=performance_start,pe
 elif st.session_state.period=="All equipment history": start,end=first,last
 elif st.session_state.period=="Latest 30 recorded days": start,end=(pd.Timestamp(last)-pd.Timedelta(days=29)).date(),last
 else:
-    dates=st.sidebar.date_input("Date interval",value=(performance_start,performance_end),min_value=min(first,performance_start),max_value=max(last,performance_end),key="dates")
+    with custom_dates_slot:
+        dates=st.date_input("Date interval",value=(performance_start,performance_end),min_value=min(first,performance_start),max_value=max(last,performance_end),key="dates")
     if len(dates)!=2:
         st.info("Choose both the start and end date.");st.stop()
     start,end=dates
 if start>end:
     st.error("Start date must be on or before end date.");st.stop()
-with st.sidebar:
-    st.caption(f"{start:%d %b %Y} — {end:%d %b %Y}")
-    st.button("Reset review scope",on_click=navigate,args=("Operations","All plants",None,"Performance period"),width="stretch")
-    st.divider()
-    st.caption(f"{len(st.session_state.reviews)} saved reviews · export to retain")
-    st.download_button("Export work log",worklog_payload(st.session_state.reviews,result.fingerprint),"BlueNexus_work_log.json","application/json",width="stretch")
-
 daily=in_scope(result.daily,plant,start,end)
 equipment=in_scope(result.equipment,plant,start,end)
 cases=in_scope(result.cases,plant,start,end,episodes=True)
+with coverage_slot:
+    days=(end-start).days+1
+    st.caption(f"Review window · {start:%d %b}–{end:%d %b %Y} · {days} calendar days")
+    for name in plants:
+        performance_days=daily.loc[daily.plant.eq(name),"date"].nunique()
+        equipment_days=equipment.loc[equipment.plant.eq(name),"date"].nunique()
+        st.caption(f"**{name}** · Performance {performance_days}/{days} days · Equipment {equipment_days}/{days} days")
+    st.caption(f"Performance records: {performance_start:%d %b}–{performance_end:%d %b} · Equipment records: {first:%d %b}–{last:%d %b}")
+with session_slot:
+    st.caption(f"Historical records · no live plant connection · {len(st.session_state.reviews)} saved reviews")
+    st.download_button("Export work log",worklog_payload(st.session_state.reviews,result.fingerprint),"BlueNexus_work_log.json","application/json",width="stretch")
+with reset_slot:
+    st.button("Reset filters",on_click=navigate,args=("Operations","All plants",None,"Performance period"),width="stretch")
 st.segmented_control("Workspace",VIEWS,key="view",selection_mode="single",width="stretch",label_visibility="collapsed",on_change=restore_operations_scope)
 view=st.session_state.view or "Operations"
 if view!="Investigations":

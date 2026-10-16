@@ -48,6 +48,8 @@ Headless Microsoft Edge at 1440×1000 and a 390×844 mobile viewport:
 - Refreshed visual design: semantic colour cards, navy sidebar, distinct heading
   and body fonts, compact investigations, tabbed energy charts and collapsible
   explanations. Inspected desktop and mobile layouts and the QZ history shortcut.
+- Sidebar now follows Yuwei's light blue, centered logo and filter-first pattern,
+  with coverage and upload/work-log controls grouped in collapsible sections.
 - Equipment bands are optional legend layers, so extreme statistical bounds do
   not compress the initial raw-value chart. Original readings remain unchanged.
 - Operations uses a CCv2 incident table with colour-coded priorities, aligned
