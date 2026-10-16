@@ -11,8 +11,8 @@ PyArrow 26.0.0. Direct runtime dependencies are pinned in requirements.txt.
 - Actual Plant A 31 August energy arithmetic, historical load residual and missing
   peer comparison agree with independent calculations.
 - The 27-day January Plant A temperature episode survives a flat/extreme baseline.
-- Hidden January temperature evidence is disclosed in the overview's priority card
-  and an expandable history panel on other views;
+- Production is the first Operations section. Hidden January temperature evidence
+  is disclosed in a compact date-context expander on every view;
   its shortcut opens the full equipment history with the correct measurement.
   The rendered chart contains all 27 original readings between 212 and 213.
 - Plant B delivery discrepancy arithmetic and percent display/export units agree.

@@ -59,9 +59,10 @@ def test_hidden_temperature_shortcut_renders_original_january_values(app):
     import base64
     import json
     import numpy as np
-    assert any("Priority history" in x.value for x in app.subheader)
+    assert app.subheader[0].value=="Production snapshot"
+    assert any("Flagged readings outside these dates" in x.label for x in app.expander)
     assert any(x.value=="212.7" for x in app.metric)
-    [b for b in app.button if b.label=="Show temperature history · Plant A"][0].click().run()
+    [b for b in app.button if b.label=="View January readings · Plant A"][0].click().run()
     assert not app.exception
     assert app.session_state["view"]=="Equipment"
     assert app.selectbox(key="period").value=="All equipment history"

@@ -141,20 +141,41 @@ st.caption(f"{plant}   /   {start:%d %b} – {end:%d %b %Y}   /   Historical rev
 # Keep excluded priority evidence visible wherever an operator enters the app.
 outside=result.cases.loc[result.cases.plant.isin(plants)&result.cases.priority.eq("Verify promptly")&~result.cases.case_id.isin(cases.case_id)]
 def priority_history():
-    st.badge("Outside selected dates",icon=":material/history:",color="red")
+    st.caption("Outside the selected date range · historical flags, not current alarms")
     for row in outside.loc[outside.code.eq("TEMPERATURE_ASSUMED_HIGH")].itertuples():
         readings=result.equipment.loc[result.equipment.plant.eq(row.plant)&result.equipment.date.between(row.start,row.end),row.signal]
         st.metric(f"{row.plant} · {row.asset} · QZ temperature" if "qz_temp" in row.signal else f"{row.plant} · {row.asset} · Temperature",f"{readings.max():.1f}",help="Original reported value. Celsius and scaling require confirmation.")
         st.caption(f"{row.start:%d %b}–{row.end:%d %b %Y} · {row.days} days · Unit unverified")
-        st.button(f"Show temperature history · {row.plant}",on_click=show_equipment_history,args=(row.plant,row.signal),key="history_"+row.case_id,width="stretch")
-    st.button("Review priority history",on_click=navigate,args=("Investigations",plant,outside.iloc[0].case_id,"All equipment history"),width="stretch")
-    st.caption("Historical episode · resolution unknown")
+        month=row.start.strftime("%B") if row.start.month==row.end.month else "flagged"
+        st.button(f"View {month} readings · {row.plant}",on_click=show_equipment_history,args=(row.plant,row.signal),key="history_"+row.case_id)
+    if len(outside.loc[~outside.code.eq("TEMPERATURE_ASSUMED_HIGH")]):
+        st.dataframe(queue_table(outside),hide_index=True,width="stretch")
+        st.button("Review flagged episodes",on_click=navigate,args=("Investigations",plant,outside.iloc[0].case_id,"All equipment history"))
+    st.caption("Resolution unknown · no repair confirmation in this dataset")
 
-if len(outside) and view!="Operations":
-    with st.expander(f":material/history: {len(outside)} priority episode(s) outside these dates · view history"):
+if len(outside):
+    first_hidden=outside.iloc[0]
+    hidden_label=f"Flagged readings outside these dates · {first_hidden.plant} · {first_hidden.start:%b %Y}"
+    if first_hidden.code=="TEMPERATURE_ASSUMED_HIGH":
+        hidden_label+=f" · temperature {first_hidden.value:.1f} (unit unverified)"
+    if len(outside)>1: hidden_label+=f" · +{len(outside)-1} more"
+    with st.expander(":material/history: "+hidden_label):
         priority_history()
 
 if view=="Operations":
+    st.subheader("Production snapshot")
+    for col,name in zip(st.columns(len(plants)),plants):
+        part=daily.loc[daily.plant.eq(name)]; s=energy_summary(part)
+        with col,st.container(key="panel_plant_"+name):
+            st.markdown(f"**:material/water_drop: {name}**")
+            a,b=st.columns(2)
+            a.metric("Product water · m³",display(s["water"],0),help="Total product water over the selected dates on matching valid energy/water records.")
+            b.metric("Energy · kWh/m³",display(s["sec"],3),help="Total electricity ÷ product water on matching valid dates.")
+            if not part.empty:
+                fig=lines(part,["effluent_volume_m3"]);fig.update_layout(height=180,showlegend=False,margin=dict(l=10,r=10,t=10,b=10))
+                plot(fig,key="snapshot_"+name)
+            else: st.caption("No performance records in this scope.")
+    st.subheader("Investigations in selected dates")
     c1,c2,c3=st.columns(3)
     with c1,st.container(key="kpi_priority"):
         st.metric("Verify promptly",str(cases.priority.eq("Verify promptly").sum()),help="Historical episodes in the selected dates. Not live or unresolved alarms.")
@@ -166,11 +187,7 @@ if view=="Operations":
         st.metric("Data checks",str(cases.family.eq("data").sum()),help="Historical consistency episodes, not confirmed faults.")
         st.caption(":material/fact_check: Measurement confidence")
     main=cases.loc[cases.family.ne("data")]
-    focus,history=st.columns([2,1],gap="medium")
-    with history,st.container(key="panel_history"):
-        st.subheader("Priority history")
-        if len(outside): priority_history()
-        else: st.caption("No priority episodes outside this scope.")
+    focus=st.container()
     with focus:
         st.subheader("Next investigation")
     if len(main):
@@ -204,18 +221,6 @@ if view=="Operations":
         for name,which,code,date in [("Why high SEC does not automatically justify a visit","Plant A","LOW_THROUGHPUT_ENERGY","2026-08-31"),("Reconcile a large delivery discrepancy","Plant B","DELIVERY_DISCREPANCY","2026-08-11"),("Verify an extreme temperature reading","Plant A","TEMPERATURE_ASSUMED_HIGH","2026-01-01")]:
             found=result.cases.loc[result.cases.plant.eq(which)&result.cases.code.eq(code)&result.cases.start.le(pd.Timestamp(date))&result.cases.end.ge(pd.Timestamp(date))]
             if len(found): st.button(name,on_click=navigate,args=("Investigations",which,found.iloc[0].case_id,"All equipment history"),key="story_"+code)
-    st.subheader("Production snapshot")
-    for col,name in zip(st.columns(len(plants)),plants):
-        part=daily.loc[daily.plant.eq(name)]; s=energy_summary(part)
-        with col,st.container(key="panel_plant_"+name):
-            st.markdown(f"**:material/water_drop: {name}**")
-            a,b=st.columns(2)
-            a.metric("Product water · m³",display(s["water"],0))
-            b.metric("Energy · kWh/m³",display(s["sec"],3),help="Total electricity ÷ product water on matching valid dates.")
-            if not part.empty:
-                fig=lines(part,["effluent_volume_m3"]);fig.update_layout(height=180,showlegend=False,margin=dict(l=10,r=10,t=10,b=10))
-                plot(fig,key="snapshot_"+name)
-            else: st.caption("No performance records in this scope.")
 
 elif view=="Investigations":
     st.session_state.setdefault("case_priority",["Verify promptly","Investigate","Check data"])

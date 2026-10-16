@@ -15,8 +15,6 @@
 .st-key-kpi_data {border-top: 4px solid #187d98; background: #edf8fc;}
 .st-key-kpi_data [data-testid="stMetricValue"] {color: #12677e;}
 .st-key-next_action {border-left: 5px solid #b77916;}
-.st-key-panel_history {border-top: 4px solid #c23c4a;}
-.st-key-panel_history [data-testid="stMetricValue"] {color: #b82e40;}
 [class*="st-key-panel_plant"] {border-top: 4px solid #128c91;}
 [data-testid="stMetricLabel"] {font-weight: 600;}
 [data-testid="stPlotlyChart"] {background: white; border-radius: 14px; border: 1px solid #e1e8ee;}
