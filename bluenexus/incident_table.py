@@ -75,7 +75,18 @@ _SCROLL_TOP=st.components.v2.component(
     css="div { width:0; height:0; overflow:hidden; }",
     js="""
     export default function({data}) {
-      if(data?.top) requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'instant'}));
+      if(data?.top) {
+        const reset=()=>{
+          window.scrollTo({top:0,left:0,behavior:'instant'});
+          document.documentElement.scrollTop=0;
+          document.body.scrollTop=0;
+          const main=document.querySelector('[data-testid="stMain"]');
+          if(main) main.scrollTop=0;
+        };
+        requestAnimationFrame(()=>requestAnimationFrame(reset));
+        setTimeout(reset,250);
+        setTimeout(reset,800);
+      }
     }
     """,
 )
