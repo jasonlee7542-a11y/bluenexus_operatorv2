@@ -20,6 +20,7 @@ from bluenexus.ingestion.sanitizer import FILES
 from bluenexus.playbooks import playbook
 from bluenexus.service import VERSION,analyze,in_scope,energy_summary,analysis_bundle
 from bluenexus.workflow import CURRENT,OUTCOMES,recommendation,handoff,worklog_payload,import_worklog,timestamp
+from bluenexus.incident_table import incident_table
 
 st.set_page_config(page_title="BlueNexus | Operations review",page_icon=":material/water_drop:",layout="wide")
 st.html(ROOT/"assets/dashboard.css")
@@ -189,35 +190,18 @@ if view=="Operations":
         st.metric("Data checks",str(cases.family.eq("data").sum()),help="Historical consistency episodes, not confirmed faults.")
         st.caption(":material/fact_check: Measurement confidence")
     main=cases.loc[cases.family.ne("data")]
-    focus=st.container()
-    with focus:
-        st.subheader("Next investigation")
-    if len(main):
-        top=main.iloc[0]
-        with focus,st.container(key="next_action"):
-            left,right=st.columns([3,1],vertical_alignment="center")
-            with left:
-                badge(top.priority)
-                st.subheader(top.title)
-                st.write(f"**{top.plant} · {top.asset}** · {top.start:%d %b}–{top.end:%d %b %Y}")
-                with st.expander("First check"):
-                    st.write(playbook(top.family,top.asset)["remote"][0])
-            with right:
-                st.button("Open investigation",type="primary",on_click=navigate,args=("Investigations",top.plant,top.case_id),width="stretch")
-    else:
-        st.info("No process/equipment rule episodes intersect these dates. Check available channels and data issues before drawing a health conclusion.")
-        st.button("Review data cases",on_click=navigate,args=("Investigations",))
+    st.subheader("Investigation queue")
     expanded=st.session_state.get("show_all_cases",False)
     if len(cases):
-        with focus:
-            if not expanded:
-                preview=main.head(4) if len(main) else cases.head(4)
-                st.dataframe(queue_table(preview),hide_index=True,width="stretch",key="case_preview")
-            st.button("Show fewer cases" if expanded else f"Browse all {len(cases)} cases",on_click=toggle_case_queue,key="browse")
-        if expanded:
-            st.subheader(f"All {len(cases)} investigations")
-            st.caption("Selected plant and dates · includes data checks")
-            st.dataframe(queue_table(cases),hide_index=True,width="stretch",height=35*(len(cases)+1)+3,row_height=35,key="case_full_queue",column_config={"Investigation":st.column_config.TextColumn(width="large"),"Days":st.column_config.NumberColumn(width="small")})
+        visible=cases if expanded else (main.head(4) if len(main) else cases.head(4))
+        st.caption(f"Select a row to investigate. Showing {len(visible)} of {len(cases)} cases.")
+        def open_queue_case(case_id):
+            chosen=cases.loc[cases.case_id.eq(case_id)].iloc[0]
+            navigate("Investigations",chosen.plant,case_id)
+        incident_table(visible,on_open=open_queue_case)
+        st.button("Show fewer cases" if expanded else f"Browse all {len(cases)} cases",on_click=toggle_case_queue,key="browse")
+    else:
+        st.info("No investigations in the selected plant and dates.")
     with st.expander("Guided walkthrough · three decisions"):
         st.caption("Each shortcut opens historical evidence. Current-condition answers remain yours to verify.")
         for name,which,code,date in [("Why high SEC does not automatically justify a visit","Plant A","LOW_THROUGHPUT_ENERGY","2026-08-31"),("Reconcile a large delivery discrepancy","Plant B","DELIVERY_DISCREPANCY","2026-08-11"),("Verify an extreme temperature reading","Plant A","TEMPERATURE_ASSUMED_HIGH","2026-01-01")]:

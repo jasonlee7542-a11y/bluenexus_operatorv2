@@ -45,15 +45,14 @@ def test_browse_expands_all_cases_in_operations(app):
     button.click().run()
     assert not app.exception
     assert app.session_state["view"]=="Operations"
-    table=next(x for x in app.dataframe if len(x.value)==count)
-    assert len(table.value)==count
+    assert any(f"Showing {count} of {count} cases" in x.value for x in app.caption)
     assert app.button(key="browse").label=="Show fewer cases"
     app.run()
     assert app.session_state["show_all_cases"]
     app.button(key="browse").click().run()
     assert not app.session_state["show_all_cases"]
     assert app.session_state["view"]=="Operations"
-    assert len(app.dataframe[0].value)==4
+    assert any(f"Showing 4 of {count} cases" in x.value for x in app.caption)
 
 def test_hidden_temperature_shortcut_renders_original_january_values(app):
     import base64

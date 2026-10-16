@@ -50,6 +50,10 @@ Headless Microsoft Edge at 1440×1000 and a 390×844 mobile viewport:
   explanations. Inspected desktop and mobile layouts and the QZ history shortcut.
 - Equipment bands are optional legend layers, so extreme statistical bounds do
   not compress the initial raw-value chart. Original readings remain unchanged.
+- Operations uses a CCv2 incident table with colour-coded priorities, aligned
+  dates/counts, row hover and case-ID navigation. Browser checks verified mouse
+  activation, keyboard Enter, all 44 in-scope rows, collapse, and mobile overflow
+  containment. Source values use DOM textContent, not interpolated HTML.
 
 ## Investigation layout references
 
