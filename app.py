@@ -44,6 +44,12 @@ def show_equipment_history(plant,signal):
 def toggle_case_queue():
     st.session_state.show_all_cases=not st.session_state.get("show_all_cases",False)
 
+def restore_operations_scope():
+    if st.session_state.get("view")=="Operations" and st.session_state.get("operations_return_scope"):
+        scope=st.session_state.pop("operations_return_scope")
+        st.session_state["plant"]=scope["plant"]
+        st.session_state["period"]=scope["period"]
+
 @st.cache_data(show_spinner=False,max_entries=4)
 def prepare(blobs,version):
     return analyze(blobs)
@@ -135,7 +141,7 @@ with st.sidebar:
 daily=in_scope(result.daily,plant,start,end)
 equipment=in_scope(result.equipment,plant,start,end)
 cases=in_scope(result.cases,plant,start,end,episodes=True)
-st.segmented_control("Workspace",VIEWS,key="view",selection_mode="single",width="stretch",label_visibility="collapsed")
+st.segmented_control("Workspace",VIEWS,key="view",selection_mode="single",width="stretch",label_visibility="collapsed",on_change=restore_operations_scope)
 view=st.session_state.view or "Operations"
 if view!="Investigations":
     st.title(view)
@@ -197,6 +203,7 @@ if view=="Operations":
         st.caption(f"Select a row to investigate. Showing {len(visible)} of {len(cases)} cases.")
         def open_queue_case(case_id):
             chosen=cases.loc[cases.case_id.eq(case_id)].iloc[0]
+            st.session_state.operations_return_scope={"plant":st.session_state.plant,"period":st.session_state.period}
             navigate("Investigations",chosen.plant,case_id)
         incident_table(visible,on_open=open_queue_case)
         st.button("Show fewer cases" if expanded else f"Browse all {len(cases)} cases",on_click=toggle_case_queue,key="browse")
