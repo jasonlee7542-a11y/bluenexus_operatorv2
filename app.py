@@ -76,8 +76,8 @@ def badge(priority):
 
 with st.sidebar:
     with st.container(key="brand"):
-        st.image(str(ROOT/"assets/bluenexus-logo.png"),width=205)
-    st.markdown("**Review filters**")
+        st.image(str(ROOT/"assets/bluenexus-logo.png"),width=220)
+    st.header("Review filters")
     st.selectbox("Plant",["All plants","Plant A","Plant B"],key="plant")
     st.selectbox("Date range",["Performance period","All equipment history","Latest 30 recorded days","Custom dates"],key="period",
                  format_func=lambda value:{"Performance period":"Performance period · Jul–Aug","All equipment history":"All available dates · Jan–Sep","Latest 30 recorded days":"Latest 30 days"}.get(value,value))

@@ -1,5 +1,7 @@
 /* Native Streamlit controls; accents are scoped to our named containers. */
 .st-key-brand {display:flex; justify-content:center; width:100%; padding:4px 0 12px;}
+[data-testid="stSidebar"] h2 {font-size:1.5rem; margin:0 0 1rem; color:#002e52;}
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {font-size:1rem; font-weight:600;}
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] strong {color:#002e52;}
 [data-testid="stSidebar"] [data-testid="stExpander"] {background:rgba(255,255,255,.62); border-color:#a7d8e9;}
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {color:#31566b;}
